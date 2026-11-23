@@ -451,6 +451,10 @@ class TestFusionCommands(unittest.TestCase):
             self.assertEqual(len(operation_log.SESSION_LOG.entries()), 0)
 
         operations_command.OpsExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        self.assertEqual(operations_command._read_design_timeline(types.SimpleNamespace()), [])
+        operations_command.OpsCommandCreatedHandler(handlers).notify(
+            types.SimpleNamespace(command=bad_cmd)
+        )
 
 
 if __name__ == "__main__":
