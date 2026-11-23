@@ -1,4 +1,4 @@
-"""Autodesk Fusion command: Attach Board (iterative board -> joint -> next board)."""
+"""Autodesk Fusion command: Attach Board (extrude outward from selected face)."""
 
 import os
 import traceback
@@ -14,8 +14,8 @@ import operation_log
 ATTACH_CMD_ID = "TimberLineAttachCmd"
 ATTACH_CMD_NAME = "Attach Board"
 ATTACH_CMD_DESC = (
-    "Attach a new board to an existing board's face and edge with a "
-    "Butt, 45° Miter, or Half-Lap joint, then continue building from there."
+    "Attach a new board extending outward from an existing board's face and edge "
+    "with a Butt, 45° Miter, or Half-Lap joint."
 )
 
 
@@ -31,12 +31,27 @@ def _face_bounds_2d(
     return (min(us), min(vs), max(us), max(vs))
 
 
-def _cut_sketch_on_face(
+def _measure_body_depth_behind_face(
+    sketch: adsk.fusion.Sketch, body: adsk.fusion.BRepBody
+) -> float:
+    if not body:
+        return 0.0
+    bb = body.boundingBox
+    zs = []
+    for x in (bb.minPoint.x, bb.maxPoint.x):
+        for y in (bb.minPoint.y, bb.maxPoint.y):
+            for z in (bb.minPoint.z, bb.maxPoint.z):
+                pt = sketch.modelToSketchSpace(adsk.core.Point3D.create(x, y, z))
+                zs.append(pt.z)
+    return max(0.0, -min(zs))
+
+
+def _cut_profiles(
     comp: adsk.fusion.Component,
-    plane,
     sketch: adsk.fusion.Sketch,
     target_body: adsk.fusion.BRepBody,
     distance_cm: float,
+    symmetric: bool = False,
 ) -> None:
     if sketch.profiles.count == 0:
         return
@@ -47,48 +62,61 @@ def _cut_sketch_on_face(
     ext_in = extrudes.createInput(
         profs, adsk.fusion.FeatureOperations.CutFeatureOperation
     )
-    ext_in.setDistanceExtent(False, adsk.core.ValueInput.createByReal(distance_cm))
+    ext_in.setDistanceExtent(
+        symmetric, adsk.core.ValueInput.createByReal(distance_cm)
+    )
     ext_in.participantBodies = [target_body]
     extrudes.add(ext_in)
 
 
-def _cut_triangles(
+def _cut_miter_wedge(
     comp: adsk.fusion.Component,
     face: adsk.fusion.BRepFace,
+    ref_sketch: adsk.fusion.Sketch,
+    plan: attach_planner.AttachPlan,
     triangles: tuple,
     target_body: adsk.fusion.BRepBody,
-    depth_cm: float,
     name: str,
 ) -> None:
-    sk = comp.sketches.add(face)
-    sk.name = name
-    lines = sk.sketchCurves.sketchLines
-    for (x0, y0), (x1, y1), (x2, y2) in triangles:
-        p0 = adsk.core.Point3D.create(x0, y0, 0.0)
-        p1 = adsk.core.Point3D.create(x1, y1, 0.0)
-        p2 = adsk.core.Point3D.create(x2, y2, 0.0)
-        lines.addByTwoPoints(p0, p1)
-        lines.addByTwoPoints(p1, p2)
-        lines.addByTwoPoints(p2, p0)
-    _cut_sketch_on_face(comp, face, sk, target_body, -depth_cm)
+    mid = plan.miter_plane_coord + plan.miter_span_cm / 2.0
+    u0, v0, u1, v1 = plan.cross_section_rect
+    if plan.miter_axis_is_u:
+        lp0 = adsk.core.Point3D.create(u0, mid, 0.0)
+        lp1 = adsk.core.Point3D.create(u1, mid, 0.0)
+    else:
+        lp0 = adsk.core.Point3D.create(mid, v0, 0.0)
+        lp1 = adsk.core.Point3D.create(mid, v1, 0.0)
 
+    line_sk = comp.sketches.add(face)
+    line_sk.name = f"{name} Axis"
+    axis_line = line_sk.sketchCurves.sketchLines.addByTwoPoints(lp0, lp1)
+    axis_line.isConstruction = True
 
-def _cut_lap_rect(
-    comp: adsk.fusion.Component,
-    plane,
-    rect: attach_planner.Rect2D,
-    target_body: adsk.fusion.BRepBody,
-    depth_cm: float,
-    name: str,
-) -> None:
-    sk = comp.sketches.add(plane)
-    sk.name = name
-    u0, v0, u1, v1 = rect
-    sk.sketchCurves.sketchLines.addTwoPointRectangle(
-        adsk.core.Point3D.create(u0, v0, 0.0),
-        adsk.core.Point3D.create(u1, v1, 0.0),
+    p_in = comp.constructionPlanes.createInput()
+    p_in.setByAngle(axis_line, adsk.core.ValueInput.createByString("90 deg"), face)
+    miter_plane = comp.constructionPlanes.add(p_in)
+
+    m_sk = comp.sketches.add(miter_plane)
+    m_sk.name = name
+    lines = m_sk.sketchCurves.sketchLines
+    for tri in triangles:
+        pts_2d = []
+        for coord, z_val in tri:
+            p3_face = (
+                adsk.core.Point3D.create(coord, mid, z_val)
+                if plan.miter_axis_is_u
+                else adsk.core.Point3D.create(mid, coord, z_val)
+            )
+            p3_model = ref_sketch.sketchToModelSpace(p3_face)
+            p2 = m_sk.modelToSketchSpace(p3_model)
+            pts_2d.append(adsk.core.Point3D.create(p2.x, p2.y, 0.0))
+        lines.addByTwoPoints(pts_2d[0], pts_2d[1])
+        lines.addByTwoPoints(pts_2d[1], pts_2d[2])
+        lines.addByTwoPoints(pts_2d[2], pts_2d[0])
+
+    _cut_profiles(
+        comp, m_sk, target_body, plan.miter_span_cm / 2.0 + 0.05, symmetric=True
     )
-    _cut_sketch_on_face(comp, plane, sk, target_body, depth_cm)
 
 
 def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) -> None:
@@ -146,7 +174,7 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
     bounds = _face_bounds_2d(ref_sketch, face)
     p0 = ref_sketch.modelToSketchSpace(edge.startVertex.geometry)
     p1 = ref_sketch.modelToSketchSpace(edge.endVertex.geometry)
-    ref_sketch.deleteMe()
+    existing_depth_cm = _measure_body_depth_behind_face(ref_sketch, existing_body)
 
     plan = attach_planner.compute_attach_plan(
         face_bounds=bounds,
@@ -154,6 +182,7 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
         edge_p1=(p1.x, p1.y),
         lumber=lumber,
         length_cm=length_cm,
+        existing_depth_cm=existing_depth_cm,
         on_edge=on_edge,
         joint_type=joint_type,
         length_mode=length_mode,
@@ -175,69 +204,70 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
     else:
         target_comp = existing_comp
 
-    # Sketch and extrude the new board on the target face
-    sk = target_comp.sketches.add(face)
+    # Cut half-lap into existing board if needed
+    if plan.existing_lap_depth_cm > 0 and existing_body:
+        lap_sk = existing_comp.sketches.add(face)
+        lap_sk.name = "Half-Lap Existing"
+        u0, v0, u1, v1 = plan.cross_section_rect
+        lap_sk.sketchCurves.sketchLines.addTwoPointRectangle(
+            adsk.core.Point3D.create(u0, v0, 0.0),
+            adsk.core.Point3D.create(u1, v1, 0.0),
+        )
+        _cut_profiles(
+            existing_comp, lap_sk, existing_body, -plan.existing_lap_depth_cm
+        )
+
+    # Determine start plane for new board (face or offset behind face)
+    if abs(plan.start_z_cm) > 1e-6:
+        p_in = target_comp.constructionPlanes.createInput()
+        p_in.setByOffset(face, adsk.core.ValueInput.createByReal(plan.start_z_cm))
+        start_plane = target_comp.constructionPlanes.add(p_in)
+    else:
+        start_plane = face
+
+    sk = target_comp.sketches.add(start_plane)
     sk.name = f"{lumber.nominal} Attached"
-    u0, v0, u1, v1 = plan.new_board_rect
+    u0, v0, u1, v1 = plan.cross_section_rect
     sk.sketchCurves.sketchLines.addTwoPointRectangle(
         adsk.core.Point3D.create(u0, v0, 0.0),
         adsk.core.Point3D.create(u1, v1, 0.0),
     )
     if sk.profiles.count == 0:
+        ref_sketch.deleteMe()
         return
     extrudes = target_comp.features.extrudeFeatures
     ext_in = extrudes.createInput(
         sk.profiles.item(0), adsk.fusion.FeatureOperations.NewBodyFeatureOperation
     )
     ext_in.setDistanceExtent(
-        False, adsk.core.ValueInput.createByReal(-plan.new_board_height_cm)
+        False, adsk.core.ValueInput.createByReal(plan.extrude_z_cm)
     )
     feat = extrudes.add(ext_in)
     new_body = feat.bodies.item(0)
     new_body.name = board_name
 
-    if plan.existing_miter_tri and existing_body:
-        _cut_triangles(
+    if plan.miter_existing_tri and existing_body:
+        _cut_miter_wedge(
             existing_comp,
             face,
-            plan.existing_miter_tri,
+            ref_sketch,
+            plan,
+            plan.miter_existing_tri,
             existing_body,
-            plan.new_board_height_cm,
             "Miter Existing",
         )
-    if plan.new_miter_tri:
-        _cut_triangles(
+    if plan.miter_new_tri:
+        _cut_miter_wedge(
             target_comp,
             face,
-            plan.new_miter_tri,
+            ref_sketch,
+            plan,
+            plan.miter_new_tri,
             new_body,
-            plan.new_board_height_cm,
             "Miter New",
         )
-    if plan.lap_rect:
-        lap_depth = plan.new_board_height_cm / 2.0
-        if existing_body:
-            _cut_lap_rect(
-                existing_comp,
-                face,
-                plan.lap_rect[0],
-                existing_body,
-                -lap_depth,
-                "Half-Lap Existing",
-            )
-        p_in = target_comp.constructionPlanes.createInput()
-        p_in.setByOffset(
-            face, adsk.core.ValueInput.createByReal(-plan.new_board_height_cm)
-        )
-        bottom_plane = target_comp.constructionPlanes.add(p_in)
-        _cut_lap_rect(
-            target_comp,
-            bottom_plane,
-            plan.lap_rect[0],
-            new_body,
-            lap_depth,
-            "Half-Lap New",
-        )
+
+    ref_sketch.deleteMe()
 
     if record_log:
         operation_log.SESSION_LOG.record(
@@ -309,13 +339,17 @@ class AttachCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             inputs = cmd.commandInputs
 
             face_sel = inputs.addSelectionInput(
-                "attachFace", "Target Face", "Select face on the existing board"
+                "attachFace",
+                "Source Face",
+                "Select the face the new board comes out from",
             )
             face_sel.addSelectionFilter("PlanarFaces")
             face_sel.setSelectionLimits(1, 1)
 
             edge_sel = inputs.addSelectionInput(
-                "attachEdge", "Attach Edge", "Select edge where the new board joins"
+                "attachEdge",
+                "Snap Edge",
+                "Select edge on that face to align the new board flush",
             )
             edge_sel.addSelectionFilter("Edges")
             edge_sel.setSelectionLimits(1, 1)

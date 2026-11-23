@@ -1,4 +1,4 @@
-"""Pure-math 2D layout planner for attaching a new board to an existing board."""
+"""Pure-math 2D/3D layout planner for attaching a new board outward from a face."""
 
 from dataclasses import dataclass
 from typing import Tuple
@@ -22,14 +22,22 @@ Triangle2D = Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]
 
 @dataclass(frozen=True)
 class AttachPlan:
-    """2D geometry plan in the target face's sketch coordinate system (cm)."""
+    """Geometry plan in the target face's sketch coordinates (cm).
 
-    new_board_rect: Rect2D
+    The selected face sits at ``z = 0``, with its outward normal along ``+Z``.
+    The existing board lies behind the face (``z in [-existing_depth_cm, 0]``).
+    """
+
+    cross_section_rect: Rect2D
+    start_z_cm: float
+    extrude_z_cm: float
+    existing_lap_depth_cm: float
     new_board_length_cm: float
-    new_board_height_cm: float
-    existing_miter_tri: Tuple[Triangle2D, ...]
-    new_miter_tri: Tuple[Triangle2D, ...]
-    lap_rect: Tuple[Rect2D, ...]
+    miter_axis_is_u: bool
+    miter_existing_tri: Tuple[Triangle2D, ...]
+    miter_new_tri: Tuple[Triangle2D, ...]
+    miter_plane_coord: float
+    miter_span_cm: float
     joint_type: str
 
 
@@ -39,151 +47,112 @@ def compute_attach_plan(
     edge_p1: Tuple[float, float],
     lumber: lumber_catalog.LumberSize,
     length_cm: float,
+    existing_depth_cm: float,
     on_edge: bool = True,
     joint_type: str = "Butt (Flush)",
     length_mode: str = "Exact Board Length",
     flip_along_edge: bool = False,
 ) -> AttachPlan:
-    """Compute placement and corner cut geometry for attaching a board to a face+edge.
-
-    In the target face's sketch space, the existing board lies inside
-    ``face_bounds`` (z <= 0). The new board attaches at ``edge_p0 -> edge_p1``
-    and extends outward away from ``face_bounds``, extruding in -Z by
-    ``new_board_height_cm`` so both boards share the top face plane (z = 0).
-    """
+    """Compute cross-section on ``face_bounds`` and outward extrusion along +Z."""
     if joint_type not in ATTACH_JOINT_TYPES:
         raise ValueError(f"Unsupported joint type: {joint_type}")
     if length_mode not in LENGTH_MODES:
         raise ValueError(f"Unsupported length mode: {length_mode}")
 
     u_min, v_min, u_max, v_max = face_bounds
-    new_thick = lumber.thickness_cm if on_edge else lumber.width_cm
-    new_height = lumber.width_cm if on_edge else lumber.thickness_cm
+    dim_along = lumber.thickness_cm if on_edge else lumber.width_cm
+    dim_across = lumber.width_cm if on_edge else lumber.thickness_cm
 
     du = abs(edge_p0[0] - edge_p1[0])
     dv = abs(edge_p0[1] - edge_p1[1])
 
-    # Determine which side of face_bounds the selected edge is on.
     if du < dv:
-        # Edge runs along V; existing board spans u_min..u_max, new board extends along U.
+        # Edge runs along V; cross-section snaps to left (u_min) or right (u_max).
         u_edge = 0.5 * (edge_p0[0] + edge_p1[0])
         is_left = abs(u_edge - u_min) <= abs(u_edge - u_max)
-        existing_span = u_max - u_min
-        v_anchor = v_max if flip_along_edge else v_min
-        v_sign = -1.0 if flip_along_edge else 1.0
+        u0, u1 = (u_min, u_min + dim_along) if is_left else (u_max - dim_along, u_max)
+        v0, v1 = (v_max - dim_across, v_max) if flip_along_edge else (v_min, v_min + dim_across)
+        miter_axis_is_u = True
+        miter_plane_coord = v0
+        miter_span = dim_across
+        edge_coord = u_min if is_left else u_max
+        inward_coord = u_min + dim_along if is_left else u_max - dim_along
+    else:
+        # Edge runs along U; cross-section snaps to bottom (v_min) or top (v_max).
+        v_edge = 0.5 * (edge_p0[1] + edge_p1[1])
+        is_bottom = abs(v_edge - v_min) <= abs(v_edge - v_max)
+        v0, v1 = (v_min, v_min + dim_along) if is_bottom else (v_max - dim_along, v_max)
+        u0, u1 = (u_max - dim_across, u_max) if flip_along_edge else (u_min, u_min + dim_across)
+        miter_axis_is_u = False
+        miter_plane_coord = u0
+        miter_span = dim_across
+        edge_coord = v_min if is_bottom else v_max
+        inward_coord = v_min + dim_along if is_bottom else v_max - dim_along
 
-        board_len = length_cm
-        if joint_type == "Butt (Flush)" and length_mode == "Total Outer Span":
-            board_len = max(0.1, length_cm - existing_span)
+    rect = _norm_rect((u0, v0, u1, v1))
 
-        if joint_type == "Butt (Flush)":
-            if is_left:
-                rect = (u_min - board_len, v_anchor, u_min, v_anchor + v_sign * new_thick)
-            else:
-                rect = (u_max, v_anchor, u_max + board_len, v_anchor + v_sign * new_thick)
-            return AttachPlan(
-                _norm_rect(rect), board_len, new_height, (), (), (), joint_type
-            )
-
-        # Miter (45°) or Half-Lap: new board overlaps existing board by existing_span
-        overlap = existing_span
-        if is_left:
-            rect = (u_max - board_len, v_anchor, u_max, v_anchor + v_sign * new_thick)
-            lap = (u_min, v_anchor, u_max, v_anchor + v_sign * new_thick)
-            if joint_type == "Miter (45°)":
-                # Existing corner (u_min..u_max, v_anchor..v_anchor + v_sign*new_thick)
-                ex_tri = (
-                    (u_min, v_anchor),
-                    (u_max, v_anchor + v_sign * new_thick),
-                    (u_min, v_anchor + v_sign * new_thick),
-                )
-                nw_tri = (
-                    (u_min, v_anchor),
-                    (u_max, v_anchor),
-                    (u_max, v_anchor + v_sign * new_thick),
-                )
-                return AttachPlan(
-                    _norm_rect(rect), board_len, new_height, (ex_tri,), (nw_tri,), (), joint_type
-                )
-        else:
-            rect = (u_min, v_anchor, u_min + board_len, v_anchor + v_sign * new_thick)
-            lap = (u_min, v_anchor, u_max, v_anchor + v_sign * new_thick)
-            if joint_type == "Miter (45°)":
-                ex_tri = (
-                    (u_max, v_anchor),
-                    (u_min, v_anchor + v_sign * new_thick),
-                    (u_max, v_anchor + v_sign * new_thick),
-                )
-                nw_tri = (
-                    (u_max, v_anchor),
-                    (u_min, v_anchor),
-                    (u_min, v_anchor + v_sign * new_thick),
-                )
-                return AttachPlan(
-                    _norm_rect(rect), board_len, new_height, (ex_tri,), (nw_tri,), (), joint_type
-                )
-
-        return AttachPlan(
-            _norm_rect(rect), board_len, new_height, (), (), (_norm_rect(lap),), joint_type
-        )
-
-    # Edge runs along U; existing board spans v_min..v_max, new board extends along V.
-    v_edge = 0.5 * (edge_p0[1] + edge_p1[1])
-    is_bottom = abs(v_edge - v_min) <= abs(v_edge - v_max)
-    existing_span = v_max - v_min
-    u_anchor = u_max if flip_along_edge else u_min
-    u_sign = -1.0 if flip_along_edge else 1.0
-
-    board_len = length_cm
-    if joint_type == "Butt (Flush)" and length_mode == "Total Outer Span":
-        board_len = max(0.1, length_cm - existing_span)
+    outward_len = length_cm
+    if length_mode == "Total Outer Span" and existing_depth_cm > 0:
+        outward_len = max(0.1, length_cm - existing_depth_cm)
 
     if joint_type == "Butt (Flush)":
-        if is_bottom:
-            rect = (u_anchor, v_min - board_len, u_anchor + u_sign * new_thick, v_min)
-        else:
-            rect = (u_anchor, v_max, u_anchor + u_sign * new_thick, v_max + board_len)
         return AttachPlan(
-            _norm_rect(rect), board_len, new_height, (), (), (), joint_type
+            cross_section_rect=rect,
+            start_z_cm=0.0,
+            extrude_z_cm=outward_len,
+            existing_lap_depth_cm=0.0,
+            new_board_length_cm=outward_len,
+            miter_axis_is_u=miter_axis_is_u,
+            miter_existing_tri=(),
+            miter_new_tri=(),
+            miter_plane_coord=miter_plane_coord,
+            miter_span_cm=miter_span,
+            joint_type=joint_type,
         )
 
-    if is_bottom:
-        rect = (u_anchor, v_max - board_len, u_anchor + u_sign * new_thick, v_max)
-        lap = (u_anchor, v_min, u_anchor + u_sign * new_thick, v_max)
-        if joint_type == "Miter (45°)":
-            ex_tri = (
-                (u_anchor, v_min),
-                (u_anchor + u_sign * new_thick, v_max),
-                (u_anchor + u_sign * new_thick, v_min),
-            )
-            nw_tri = (
-                (u_anchor, v_min),
-                (u_anchor, v_max),
-                (u_anchor + u_sign * new_thick, v_max),
-            )
-            return AttachPlan(
-                _norm_rect(rect), board_len, new_height, (ex_tri,), (nw_tri,), (), joint_type
-            )
-    else:
-        rect = (u_anchor, v_min, u_anchor + u_sign * new_thick, v_min + board_len)
-        lap = (u_anchor, v_min, u_anchor + u_sign * new_thick, v_max)
-        if joint_type == "Miter (45°)":
-            ex_tri = (
-                (u_anchor, v_max),
-                (u_anchor + u_sign * new_thick, v_min),
-                (u_anchor + u_sign * new_thick, v_max),
-            )
-            nw_tri = (
-                (u_anchor, v_max),
-                (u_anchor, v_min),
-                (u_anchor + u_sign * new_thick, v_min),
-            )
-            return AttachPlan(
-                _norm_rect(rect), board_len, new_height, (ex_tri,), (nw_tri,), (), joint_type
-            )
+    if joint_type == "Half-Lap":
+        half_depth = existing_depth_cm / 2.0 if existing_depth_cm > 0 else 0.0
+        total_new_len = outward_len + half_depth
+        return AttachPlan(
+            cross_section_rect=rect,
+            start_z_cm=-half_depth,
+            extrude_z_cm=total_new_len,
+            existing_lap_depth_cm=half_depth,
+            new_board_length_cm=total_new_len,
+            miter_axis_is_u=miter_axis_is_u,
+            miter_existing_tri=(),
+            miter_new_tri=(),
+            miter_plane_coord=miter_plane_coord,
+            miter_span_cm=miter_span,
+            joint_type=joint_type,
+        )
 
+    # Miter (45°): new board starts at z = -existing_depth_cm, both cut at 45 deg
+    d = existing_depth_cm
+    total_new_len = outward_len + d
+    # In (coord, z) space: existing board has z in [-d, 0], new board overlaps [edge..inward]
+    ex_tri = (
+        (edge_coord, 0.0),
+        (inward_coord, -d),
+        (inward_coord, 0.0),
+    )
+    nw_tri = (
+        (edge_coord, 0.0),
+        (inward_coord, -d),
+        (edge_coord, -d),
+    )
     return AttachPlan(
-        _norm_rect(rect), board_len, new_height, (), (), (_norm_rect(lap),), joint_type
+        cross_section_rect=rect,
+        start_z_cm=-d,
+        extrude_z_cm=total_new_len,
+        existing_lap_depth_cm=0.0,
+        new_board_length_cm=total_new_len,
+        miter_axis_is_u=miter_axis_is_u,
+        miter_existing_tri=(ex_tri,),
+        miter_new_tri=(nw_tri,),
+        miter_plane_coord=miter_plane_coord,
+        miter_span_cm=miter_span,
+        joint_type=joint_type,
     )
 
 

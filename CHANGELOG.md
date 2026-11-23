@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.3.2] - 2026-11-22
+### Fixed
+- **Attach Board** now extrudes the new board **outward** from the selected **Source Face** (`+Z` normal) instead of sideways off the face, with **Half-Lap** and **Miter (45°)** overlapping into the existing board behind the face.
+
 ## [1.3.1] - 2026-11-22
 ### Changed
 - **Create Lumber** and **Attach Board** now default **Create New Component** to `False`, creating each board as a named `BRepBody` directly in the active component.

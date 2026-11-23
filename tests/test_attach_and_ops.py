@@ -8,71 +8,77 @@ import operation_log
 class TestAttachPlanner(unittest.TestCase):
     def setUp(self):
         self.two_by_four = lumber_catalog.LUMBER_BY_NOMINAL["2x4"]
-        self.bounds = (0.0, 0.0, 3.81, 243.84)  # Vertical 2x4 along Y (1.5" x 96")
+        self.bounds = (0.0, 0.0, 243.84, 8.89)  # Side face of horizontal 2x4 (96" x 3.5")
         self.len_cm = lumber_catalog.inches_to_cm(48.0)
+        self.depth_cm = lumber_catalog.inches_to_cm(1.5)
 
     def test_butt_flush_exact_and_outer_span_left_right(self):
-        # Right edge, exact length
+        # Left vertical edge, exact length -> extrudes +48" from z=0
         plan = attach_planner.compute_attach_plan(
-            self.bounds, (3.81, 0.0), (3.81, 243.84),
-            self.two_by_four, self.len_cm, on_edge=True,
-            joint_type="Butt (Flush)", length_mode="Exact Board Length",
+            self.bounds, (0.0, 0.0), (0.0, 8.89),
+            self.two_by_four, self.len_cm, existing_depth_cm=self.depth_cm,
+            on_edge=True, joint_type="Butt (Flush)", length_mode="Exact Board Length",
         )
-        self.assertAlmostEqual(plan.new_board_length_cm, self.len_cm)
-        self.assertAlmostEqual(plan.new_board_rect[0], 3.81)
+        self.assertAlmostEqual(plan.start_z_cm, 0.0)
+        self.assertAlmostEqual(plan.extrude_z_cm, self.len_cm)
+        self.assertAlmostEqual(plan.cross_section_rect[0], 0.0)
+        self.assertAlmostEqual(plan.cross_section_rect[2], self.two_by_four.thickness_cm)
 
-        # Left edge, Total Outer Span shortens by existing 1.5"
-        plan_l = attach_planner.compute_attach_plan(
-            self.bounds, (0.0, 0.0), (0.0, 243.84),
-            self.two_by_four, self.len_cm, on_edge=True,
-            joint_type="Butt (Flush)", length_mode="Total Outer Span",
+        # Right vertical edge, Total Outer Span -> shortens outward by existing 1.5"
+        plan_r = attach_planner.compute_attach_plan(
+            self.bounds, (243.84, 0.0), (243.84, 8.89),
+            self.two_by_four, self.len_cm, existing_depth_cm=self.depth_cm,
+            on_edge=True, joint_type="Butt (Flush)", length_mode="Total Outer Span",
             flip_along_edge=True,
         )
-        self.assertAlmostEqual(plan_l.new_board_length_cm, lumber_catalog.inches_to_cm(46.5))
-        self.assertAlmostEqual(plan_l.new_board_rect[2], 0.0)
+        self.assertAlmostEqual(plan_r.extrude_z_cm, lumber_catalog.inches_to_cm(46.5))
+        self.assertAlmostEqual(plan_r.cross_section_rect[2], 243.84)
 
     def test_butt_flush_top_and_bottom_edges(self):
-        h_bounds = (0.0, 0.0, 243.84, 3.81)
         plan_b = attach_planner.compute_attach_plan(
-            h_bounds, (0.0, 0.0), (243.84, 0.0),
-            self.two_by_four, self.len_cm, on_edge=False,
-            joint_type="Butt (Flush)", length_mode="Total Outer Span",
+            self.bounds, (0.0, 0.0), (243.84, 0.0),
+            self.two_by_four, self.len_cm, existing_depth_cm=self.depth_cm,
+            on_edge=False, joint_type="Butt (Flush)", length_mode="Total Outer Span",
         )
-        self.assertAlmostEqual(plan_b.new_board_length_cm, lumber_catalog.inches_to_cm(46.5))
+        self.assertAlmostEqual(plan_b.extrude_z_cm, lumber_catalog.inches_to_cm(46.5))
 
         plan_t = attach_planner.compute_attach_plan(
-            h_bounds, (0.0, 3.81), (243.84, 3.81),
-            self.two_by_four, self.len_cm, on_edge=True,
-            joint_type="Butt (Flush)", flip_along_edge=True,
+            self.bounds, (0.0, 8.89), (243.84, 8.89),
+            self.two_by_four, self.len_cm, existing_depth_cm=self.depth_cm,
+            on_edge=True, joint_type="Butt (Flush)", flip_along_edge=True,
         )
-        self.assertAlmostEqual(plan_t.new_board_rect[1], 3.81)
+        self.assertAlmostEqual(plan_t.cross_section_rect[3], 8.89)
 
     def test_miter_and_half_lap_all_four_edges(self):
-        for edge_p0, edge_p1, bnd in [
-            ((0.0, 0.0), (0.0, 243.84), self.bounds),
-            ((3.81, 0.0), (3.81, 243.84), self.bounds),
-            ((0.0, 0.0), (243.84, 0.0), (0.0, 0.0, 243.84, 3.81)),
-            ((0.0, 3.81), (243.84, 3.81), (0.0, 0.0, 243.84, 3.81)),
+        for edge_p0, edge_p1 in [
+            ((0.0, 0.0), (0.0, 8.89)),
+            ((243.84, 0.0), (243.84, 8.89)),
+            ((0.0, 0.0), (243.84, 0.0)),
+            ((0.0, 8.89), (243.84, 8.89)),
         ]:
             m_plan = attach_planner.compute_attach_plan(
-                bnd, edge_p0, edge_p1, self.two_by_four, self.len_cm, joint_type="Miter (45°)"
+                self.bounds, edge_p0, edge_p1, self.two_by_four, self.len_cm,
+                existing_depth_cm=self.depth_cm, joint_type="Miter (45°)",
             )
-            self.assertEqual(len(m_plan.existing_miter_tri), 1)
-            self.assertEqual(len(m_plan.new_miter_tri), 1)
+            self.assertAlmostEqual(m_plan.start_z_cm, -self.depth_cm)
+            self.assertEqual(len(m_plan.miter_existing_tri), 1)
+            self.assertEqual(len(m_plan.miter_new_tri), 1)
 
             hl_plan = attach_planner.compute_attach_plan(
-                bnd, edge_p0, edge_p1, self.two_by_four, self.len_cm, joint_type="Half-Lap"
+                self.bounds, edge_p0, edge_p1, self.two_by_four, self.len_cm,
+                existing_depth_cm=self.depth_cm, joint_type="Half-Lap",
             )
-            self.assertEqual(len(hl_plan.lap_rect), 1)
+            self.assertAlmostEqual(hl_plan.start_z_cm, -self.depth_cm / 2.0)
+            self.assertAlmostEqual(hl_plan.existing_lap_depth_cm, self.depth_cm / 2.0)
 
     def test_invalid_options_raise(self):
         with self.assertRaises(ValueError):
             attach_planner.compute_attach_plan(
-                self.bounds, (0.0, 0.0), (0.0, 10.0), self.two_by_four, 10.0, joint_type="Bad"
+                self.bounds, (0.0, 0.0), (0.0, 8.89), self.two_by_four, 10.0, 3.81, joint_type="Bad"
             )
         with self.assertRaises(ValueError):
             attach_planner.compute_attach_plan(
-                self.bounds, (0.0, 0.0), (0.0, 10.0), self.two_by_four, 10.0, length_mode="Bad"
+                self.bounds, (0.0, 0.0), (0.0, 8.89), self.two_by_four, 10.0, 3.81, length_mode="Bad"
             )
 
 
