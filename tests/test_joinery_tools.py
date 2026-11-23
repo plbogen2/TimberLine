@@ -1,0 +1,91 @@
+import unittest
+
+import joinery_tools
+
+
+class TestJoineryTools(unittest.TestCase):
+    def test_rabbet_all_four_edges(self):
+        bounds = (0.0, 0.0, 10.0, 20.0)
+        # Left edge
+        u0, v0, u1, v1 = joinery_tools.compute_edge_strip_rect(
+            bounds, (0.0, 0.0), (0.0, 20.0), width=1.0
+        )
+        self.assertLess(u0, 0.0)
+        self.assertAlmostEqual(u1, 1.0)
+        # Right edge
+        u0, v0, u1, v1 = joinery_tools.compute_edge_strip_rect(
+            bounds, (10.0, 0.0), (10.0, 20.0), width=1.0
+        )
+        self.assertAlmostEqual(u0, 9.0)
+        self.assertGreater(u1, 10.0)
+        # Bottom edge
+        u0, v0, u1, v1 = joinery_tools.compute_edge_strip_rect(
+            bounds, (0.0, 0.0), (10.0, 0.0), width=1.0
+        )
+        self.assertLess(v0, 0.0)
+        self.assertAlmostEqual(v1, 1.0)
+        # Top edge
+        u0, v0, u1, v1 = joinery_tools.compute_edge_strip_rect(
+            bounds, (0.0, 20.0), (10.0, 20.0), width=1.0
+        )
+        self.assertAlmostEqual(v0, 19.0)
+        self.assertGreater(v1, 20.0)
+
+    def test_dado_offset_from_bottom_and_right(self):
+        bounds = (0.0, 0.0, 10.0, 20.0)
+        u0, v0, u1, v1 = joinery_tools.compute_edge_strip_rect(
+            bounds, (0.0, 0.0), (10.0, 0.0), width=1.8, offset=5.0
+        )
+        self.assertAlmostEqual(v0, 5.0)
+        self.assertAlmostEqual(v1, 6.8)
+
+        u0, v0, u1, v1 = joinery_tools.compute_edge_strip_rect(
+            bounds, (10.0, 0.0), (10.0, 20.0), width=1.8, offset=3.0
+        )
+        self.assertAlmostEqual(u0, 5.2)
+        self.assertAlmostEqual(u1, 7.0)
+
+    def test_centered_tenon_aligns_with_long_axis(self):
+        u0, v0, u1, v1 = joinery_tools.compute_centered_rect(
+            (0.0, 0.0, 3.81, 8.89), short_dim=1.27, long_dim=6.35
+        )
+        self.assertAlmostEqual(u1 - u0, 1.27)
+        self.assertAlmostEqual(v1 - v0, 6.35)
+
+        u0, v0, u1, v1 = joinery_tools.compute_centered_rect(
+            (0.0, 0.0, 8.89, 3.81), short_dim=1.27, long_dim=6.35
+        )
+        self.assertAlmostEqual(u1 - u0, 6.35)
+        self.assertAlmostEqual(v1 - v0, 1.27)
+
+    def test_dowel_centers_edge_cases(self):
+        self.assertEqual(joinery_tools.compute_dowel_centers((0.0, 0.0, 10.0, 2.0), 0, 1.0), [])
+        self.assertEqual(
+            joinery_tools.compute_dowel_centers((0.0, 0.0, 10.0, 2.0), 1, 1.0),
+            [(5.0, 1.0)],
+        )
+        self.assertEqual(
+            joinery_tools.compute_dowel_centers((0.0, 0.0, 10.0, 2.0), 3, 1.0),
+            [(1.0, 1.0), (5.0, 1.0), (9.0, 1.0)],
+        )
+
+    def test_pocket_hole_line_and_centers_vertical_and_horizontal(self):
+        lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
+            (0.0, 0.0, 20.0, 10.0), (0.0, 0.0), (0.0, 10.0), setback=3.0, count=2, edge_inset=2.0
+        )
+        self.assertEqual(lp0, (3.0, 0.0))
+        self.assertEqual(lp1, (3.0, 10.0))
+        self.assertEqual(to_edge, (-1.0, 0.0))
+        self.assertEqual(centers, [(3.0, 2.0), (3.0, 8.0)])
+
+        lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
+            (0.0, 0.0, 20.0, 10.0), (0.0, 10.0), (20.0, 10.0), setback=2.0, count=1, edge_inset=2.0
+        )
+        self.assertEqual(lp0, (0.0, 8.0))
+        self.assertEqual(lp1, (20.0, 8.0))
+        self.assertEqual(to_edge, (0.0, 1.0))
+        self.assertEqual(centers, [(10.0, 8.0)])
+
+
+if __name__ == "__main__":
+    unittest.main()

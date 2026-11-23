@@ -11,6 +11,7 @@ New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 $itemsToCopy = @(
     "TimberLine.manifest",
     "TimberLine.py",
+    "fusion_ui.py",
     "lumber_catalog.py",
     "joinery_tools.py",
     "joinery_command.py",

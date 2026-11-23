@@ -3,10 +3,12 @@
 import math
 import os
 import traceback
+from typing import Dict, List, Tuple
 
 import adsk.core
 import adsk.fusion
 
+import fusion_ui
 import joinery_tools
 
 JOINERY_CMD_ID = "TimberLineJoineryCmd"
@@ -27,6 +29,60 @@ JOINT_TYPES = [
 ]
 
 _EDGE_REQUIRED_JOINTS = {"Rabbet", "Dado / Groove", "Half-Lap", "Pocket Holes (15°)"}
+
+_ALL_PARAM_INPUT_IDS = (
+    "jointWidth",
+    "jointDepth",
+    "jointOffset",
+    "tenonThick",
+    "tenonWidth",
+    "tenonLength",
+    "holeCount",
+    "holeDia",
+    "pilotDia",
+    "holeInset",
+)
+
+# Declarative per-joint UI layout: maps joint name -> list of (input_id, label_override, default_expr).
+_JOINT_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
+    "Rabbet": [
+        ("jointWidth", "Width", "0.5 in"),
+        ("jointDepth", "Depth", "0.375 in"),
+    ],
+    "Dado / Groove": [
+        ("jointOffset", "Offset from Edge", "6 in"),
+        ("jointWidth", "Dado Width", "23/32 in"),
+        ("jointDepth", "Depth", "0.375 in"),
+    ],
+    "Half-Lap": [
+        ("jointWidth", "Lap Length", "3.5 in"),
+        ("jointDepth", "Depth", "0.75 in"),
+    ],
+    "Tenon": [
+        ("tenonThick", "Tenon Thickness", "0.5 in"),
+        ("tenonWidth", "Tenon Width", "2.5 in"),
+        ("tenonLength", "Tenon Length", "1.5 in"),
+    ],
+    "Mortise": [
+        ("jointWidth", "Mortise Width", "0.5 in"),
+        ("tenonWidth", "Mortise Length", "2.5 in"),
+        ("jointDepth", "Mortise Depth", "1.625 in"),
+    ],
+    "Pocket Holes (15°)": [
+        ("holeCount", "", ""),
+        ("jointOffset", "Setback from Edge", "1.25 in"),
+        ("holeInset", "", ""),
+        ("holeDia", "Pocket Dia", "0.375 in"),
+        ("pilotDia", "", ""),
+        ("jointDepth", "Pocket Depth", "1.125 in"),
+    ],
+    "Dowel Holes": [
+        ("holeCount", "", ""),
+        ("holeDia", "Dowel Dia", "0.375 in"),
+        ("jointDepth", "Hole Depth", "0.75 in"),
+        ("holeInset", "", ""),
+    ],
+}
 
 
 def _face_bounds_2d(
@@ -50,6 +106,19 @@ def _target_component_for_face(
     return design.activeComponent
 
 
+def _cut_profiles(
+    comp: adsk.fusion.Component,
+    profiles,
+    depth_cm: float,
+) -> None:
+    extrudes = comp.features.extrudeFeatures
+    ext_input = extrudes.createInput(
+        profiles, adsk.fusion.FeatureOperations.CutFeatureOperation
+    )
+    ext_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(-depth_cm))
+    extrudes.add(ext_input)
+
+
 def _cut_rect_on_face(
     comp: adsk.fusion.Component,
     face: adsk.fusion.BRepFace,
@@ -64,14 +133,32 @@ def _cut_rect_on_face(
         adsk.core.Point3D.create(u0, v0, 0.0),
         adsk.core.Point3D.create(u1, v1, 0.0),
     )
+    if sketch.profiles.count > 0:
+        _cut_profiles(comp, sketch.profiles.item(0), depth_cm)
+
+
+def _cut_circles_on_plane(
+    comp: adsk.fusion.Component,
+    plane,
+    centers_3d: List[adsk.core.Point3D],
+    dia_cm: float,
+    depth_cm: float,
+    name: str,
+) -> None:
+    sketch = comp.sketches.add(plane)
+    sketch.name = name
+    radius = dia_cm / 2.0
+    circles = sketch.sketchCurves.sketchCircles
+    for c3 in centers_3d:
+        cp = sketch.modelToSketchSpace(c3)
+        circles.addByCenterRadius(adsk.core.Point3D.create(cp.x, cp.y, 0.0), radius)
+
     if sketch.profiles.count == 0:
         return
-    extrudes = comp.features.extrudeFeatures
-    ext_input = extrudes.createInput(
-        sketch.profiles.item(0), adsk.fusion.FeatureOperations.CutFeatureOperation
-    )
-    ext_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(-depth_cm))
-    extrudes.add(ext_input)
+    profs = adsk.core.ObjectCollection.create()
+    for i in range(sketch.profiles.count):
+        profs.add(sketch.profiles.item(i))
+    _cut_profiles(comp, profs, depth_cm)
 
 
 def _cut_tenon(
@@ -99,21 +186,11 @@ def _cut_tenon(
         adsk.core.Point3D.create(iu1, iv1, 0.0),
     )
 
-    outer_profile = None
     for i in range(sketch.profiles.count):
         prof = sketch.profiles.item(i)
         if prof.profileLoops.count >= 2:
-            outer_profile = prof
-            break
-    if outer_profile is None:
-        return
-
-    extrudes = comp.features.extrudeFeatures
-    ext_input = extrudes.createInput(
-        outer_profile, adsk.fusion.FeatureOperations.CutFeatureOperation
-    )
-    ext_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(-length_cm))
-    extrudes.add(ext_input)
+            _cut_profiles(comp, prof, length_cm)
+            return
 
 
 def _cut_dowel_holes(
@@ -125,26 +202,14 @@ def _cut_dowel_holes(
     inset_cm: float,
 ) -> None:
     sketch = comp.sketches.add(face)
-    sketch.name = "Dowel Holes"
     bounds = _face_bounds_2d(sketch, face)
-    centers = joinery_tools.compute_dowel_centers(bounds, count, inset_cm)
-    circles = sketch.sketchCurves.sketchCircles
-    radius = dia_cm / 2.0
-    for cx, cy in centers:
-        circles.addByCenterRadius(adsk.core.Point3D.create(cx, cy, 0.0), radius)
-
-    if sketch.profiles.count == 0:
-        return
-    profs = adsk.core.ObjectCollection.create()
-    for i in range(sketch.profiles.count):
-        profs.add(sketch.profiles.item(i))
-
-    extrudes = comp.features.extrudeFeatures
-    ext_input = extrudes.createInput(
-        profs, adsk.fusion.FeatureOperations.CutFeatureOperation
-    )
-    ext_input.setDistanceExtent(False, adsk.core.ValueInput.createByReal(-depth_cm))
-    extrudes.add(ext_input)
+    centers_2d = joinery_tools.compute_dowel_centers(bounds, count, inset_cm)
+    centers_3d = [
+        sketch.sketchToModelSpace(adsk.core.Point3D.create(cx, cy, 0.0))
+        for cx, cy in centers_2d
+    ]
+    sketch.deleteMe()
+    _cut_circles_on_plane(comp, face, centers_3d, dia_cm, depth_cm, "Dowel Holes")
 
 
 def _cut_pocket_holes(
@@ -181,16 +246,13 @@ def _cut_pocket_holes(
     to_edge_vec = origin_3d.vectorTo(dir_pt_3d)
     to_edge_vec.normalize()
 
-    # Create 15-degree angled construction plane tilted toward the edge.
     planes = comp.constructionPlanes
     plane_input = planes.createInput()
     plane_input.setByAngle(line, adsk.core.ValueInput.createByString("15 deg"), face)
     angled_plane = planes.add(plane_input)
 
-    # Cut direction is -plane_normal; verify it points toward the edge.
-    if (-angled_plane.geometry.normal.x * to_edge_vec.x
-        - angled_plane.geometry.normal.y * to_edge_vec.y
-        - angled_plane.geometry.normal.z * to_edge_vec.z) < 0:
+    # Cut direction is -normal; ensure it points toward the selected edge.
+    if angled_plane.geometry.normal.dotProduct(to_edge_vec) > 0:
         angled_plane.deleteMe()
         plane_input = planes.createInput()
         plane_input.setByAngle(
@@ -203,46 +265,13 @@ def _cut_pocket_holes(
         for cx, cy in centers_2d
     ]
 
-    # 1. Cut 3/8" pocket bore
-    pocket_sketch = comp.sketches.add(angled_plane)
-    pocket_sketch.name = "Pocket Bore"
-    for c3 in centers_3d:
-        cp = pocket_sketch.modelToSketchSpace(c3)
-        pocket_sketch.sketchCurves.sketchCircles.addByCenterRadius(
-            adsk.core.Point3D.create(cp.x, cp.y, 0.0), pocket_dia_cm / 2.0
-        )
-    if pocket_sketch.profiles.count > 0:
-        profs = adsk.core.ObjectCollection.create()
-        for i in range(pocket_sketch.profiles.count):
-            profs.add(pocket_sketch.profiles.item(i))
-        ext_in = comp.features.extrudeFeatures.createInput(
-            profs, adsk.fusion.FeatureOperations.CutFeatureOperation
-        )
-        ext_in.setDistanceExtent(
-            False, adsk.core.ValueInput.createByReal(-pocket_depth_cm)
-        )
-        comp.features.extrudeFeatures.add(ext_in)
-
-    # 2. Cut 5/32" pilot hole through the edge
+    _cut_circles_on_plane(
+        comp, angled_plane, centers_3d, pocket_dia_cm, pocket_depth_cm, "Pocket Bore"
+    )
     pilot_depth_cm = setback_cm / math.cos(math.radians(15.0)) + 1.0
-    pilot_sketch = comp.sketches.add(angled_plane)
-    pilot_sketch.name = "Pocket Pilot"
-    for c3 in centers_3d:
-        cp = pilot_sketch.modelToSketchSpace(c3)
-        pilot_sketch.sketchCurves.sketchCircles.addByCenterRadius(
-            adsk.core.Point3D.create(cp.x, cp.y, 0.0), pilot_dia_cm / 2.0
-        )
-    if pilot_sketch.profiles.count > 0:
-        profs = adsk.core.ObjectCollection.create()
-        for i in range(pilot_sketch.profiles.count):
-            profs.add(pilot_sketch.profiles.item(i))
-        ext_in = comp.features.extrudeFeatures.createInput(
-            profs, adsk.fusion.FeatureOperations.CutFeatureOperation
-        )
-        ext_in.setDistanceExtent(
-            False, adsk.core.ValueInput.createByReal(-pilot_depth_cm)
-        )
-        comp.features.extrudeFeatures.add(ext_in)
+    _cut_circles_on_plane(
+        comp, angled_plane, centers_3d, pilot_dia_cm, pilot_depth_cm, "Pocket Pilot"
+    )
 
 
 def _execute_joinery(inputs: adsk.core.CommandInputs) -> None:
@@ -363,52 +392,16 @@ class JoineryInputChangedHandler(adsk.core.InputChangedEventHandler):
             )
             edge_sel.isVisible = jt in _EDGE_REQUIRED_JOINTS
 
-            w_in = adsk.core.ValueCommandInput.cast(inputs.itemById("jointWidth"))
-            d_in = adsk.core.ValueCommandInput.cast(inputs.itemById("jointDepth"))
-            off_in = adsk.core.ValueCommandInput.cast(inputs.itemById("jointOffset"))
-            t_thick = adsk.core.ValueCommandInput.cast(inputs.itemById("tenonThick"))
-            t_width = adsk.core.ValueCommandInput.cast(inputs.itemById("tenonWidth"))
-            t_len = adsk.core.ValueCommandInput.cast(inputs.itemById("tenonLength"))
-            h_cnt = adsk.core.IntegerSpinnerCommandInput.cast(
-                inputs.itemById("holeCount")
-            )
-            h_dia = adsk.core.ValueCommandInput.cast(inputs.itemById("holeDia"))
-            p_dia = adsk.core.ValueCommandInput.cast(inputs.itemById("pilotDia"))
-            h_ins = adsk.core.ValueCommandInput.cast(inputs.itemById("holeInset"))
+            for input_id in _ALL_PARAM_INPUT_IDS:
+                inputs.itemById(input_id).isVisible = False
 
-            for item in (w_in, d_in, off_in, t_thick, t_width, t_len, h_cnt, h_dia, p_dia, h_ins):
-                item.isVisible = False
-
-            if jt == "Rabbet":
-                w_in.name, w_in.expression, w_in.isVisible = "Width", "0.5 in", True
-                d_in.name, d_in.expression, d_in.isVisible = "Depth", "0.375 in", True
-            elif jt == "Dado / Groove":
-                off_in.name, off_in.expression, off_in.isVisible = "Offset from Edge", "6 in", True
-                w_in.name, w_in.expression, w_in.isVisible = "Dado Width", "23/32 in", True
-                d_in.name, d_in.expression, d_in.isVisible = "Depth", "0.375 in", True
-            elif jt == "Half-Lap":
-                w_in.name, w_in.expression, w_in.isVisible = "Lap Length", "3.5 in", True
-                d_in.name, d_in.expression, d_in.isVisible = "Depth", "0.75 in", True
-            elif jt == "Tenon":
-                t_thick.isVisible = True
-                t_width.name, t_width.expression, t_width.isVisible = "Tenon Width", "2.5 in", True
-                t_len.isVisible = True
-            elif jt == "Mortise":
-                w_in.name, w_in.expression, w_in.isVisible = "Mortise Width", "0.5 in", True
-                t_width.name, t_width.expression, t_width.isVisible = "Mortise Length", "2.5 in", True
-                d_in.name, d_in.expression, d_in.isVisible = "Mortise Depth", "1.625 in", True
-            elif jt == "Pocket Holes (15°)":
-                h_cnt.isVisible = True
-                off_in.name, off_in.expression, off_in.isVisible = "Setback from Edge", "1.25 in", True
-                h_ins.isVisible = True
-                h_dia.name, h_dia.expression, h_dia.isVisible = "Pocket Dia", "0.375 in", True
-                p_dia.isVisible = True
-                d_in.name, d_in.expression, d_in.isVisible = "Pocket Depth", "1.125 in", True
-            elif jt == "Dowel Holes":
-                h_cnt.isVisible = True
-                h_dia.name, h_dia.expression, h_dia.isVisible = "Dowel Dia", "0.375 in", True
-                d_in.name, d_in.expression, d_in.isVisible = "Hole Depth", "0.75 in", True
-                h_ins.isVisible = True
+            for input_id, label, expr in _JOINT_UI_CONFIG.get(jt, []):
+                ctrl = inputs.itemById(input_id)
+                if label:
+                    ctrl.name = label
+                if expr:
+                    adsk.core.ValueCommandInput.cast(ctrl).expression = expr
+                ctrl.isVisible = True
         except Exception:
             pass
 
@@ -556,30 +549,17 @@ def register_joinery_command(
     addin_dir: str,
     handlers: list,
 ) -> None:
-    res_dir = os.path.join(addin_dir, "resources", "JoineryIcon")
-    resource_arg = res_dir if os.path.isdir(res_dir) else ""
-    cmd_def = ui.commandDefinitions.itemById(JOINERY_CMD_ID)
-    if not cmd_def:
-        cmd_def = ui.commandDefinitions.addButtonDefinition(
-            JOINERY_CMD_ID, JOINERY_CMD_NAME, JOINERY_CMD_DESC, resource_arg
-        )
-    on_created = JoineryCommandCreatedHandler(handlers)
-    cmd_def.commandCreated.add(on_created)
-    handlers.append(on_created)
-
-    panel = ui.allToolbarPanels.itemById(panel_id)
-    if panel and not panel.controls.itemById(JOINERY_CMD_ID):
-        cntrl = panel.controls.addCommand(cmd_def)
-        cntrl.isPromotedByDefault = True
-        cntrl.isPromoted = True
+    fusion_ui.register_panel_command(
+        ui=ui,
+        panel_id=panel_id,
+        cmd_id=JOINERY_CMD_ID,
+        cmd_name=JOINERY_CMD_NAME,
+        cmd_desc=JOINERY_CMD_DESC,
+        resource_dir=os.path.join(addin_dir, "resources", "JoineryIcon"),
+        created_handler_factory=lambda: JoineryCommandCreatedHandler(handlers),
+        handlers=handlers,
+    )
 
 
 def unregister_joinery_command(ui: adsk.core.UserInterface, panel_id: str) -> None:
-    panel = ui.allToolbarPanels.itemById(panel_id)
-    if panel:
-        cntrl = panel.controls.itemById(JOINERY_CMD_ID)
-        if cntrl:
-            cntrl.deleteMe()
-    cmd_def = ui.commandDefinitions.itemById(JOINERY_CMD_ID)
-    if cmd_def:
-        cmd_def.deleteMe()
+    fusion_ui.unregister_panel_command(ui, panel_id, JOINERY_CMD_ID)

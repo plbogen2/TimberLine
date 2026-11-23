@@ -18,6 +18,7 @@ Copy-Item -Force (Join-Path $rootDir "PackageContents.xml") (Join-Path $bundleDi
 $items = @(
     "TimberLine.manifest",
     "TimberLine.py",
+    "fusion_ui.py",
     "lumber_catalog.py",
     "joinery_tools.py",
     "joinery_command.py",

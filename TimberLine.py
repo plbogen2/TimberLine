@@ -16,6 +16,7 @@ ADDIN_DIR = os.path.dirname(os.path.realpath(__file__))
 if ADDIN_DIR not in sys.path:
     sys.path.insert(0, ADDIN_DIR)
 
+import fusion_ui  # noqa: E402
 import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
 import lumber_catalog  # noqa: E402
@@ -515,23 +516,16 @@ def run(context):
         app = adsk.core.Application.get()
         ui = app.userInterface
 
-        cmd_def = ui.commandDefinitions.itemById(CMD_ID)
-        if not cmd_def:
-            resource_arg = RESOURCE_FOLDER if os.path.isdir(RESOURCE_FOLDER) else ""
-            cmd_def = ui.commandDefinitions.addButtonDefinition(
-                CMD_ID, CMD_NAME, CMD_DESCRIPTION, resource_arg
-            )
-
-        on_created = LumberCommandCreatedHandler()
-        cmd_def.commandCreated.add(on_created)
-        _handlers.append(on_created)
-
-        panel = ui.allToolbarPanels.itemById(PANEL_ID)
-        if panel and not panel.controls.itemById(CMD_ID):
-            cntrl = panel.controls.addCommand(cmd_def)
-            cntrl.isPromotedByDefault = True
-            cntrl.isPromoted = True
-
+        fusion_ui.register_panel_command(
+            ui=ui,
+            panel_id=PANEL_ID,
+            cmd_id=CMD_ID,
+            cmd_name=CMD_NAME,
+            cmd_desc=CMD_DESCRIPTION,
+            resource_dir=RESOURCE_FOLDER,
+            created_handler_factory=LumberCommandCreatedHandler,
+            handlers=_handlers,
+        )
         joinery_command.register_joinery_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         kerf_command.register_kerf_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
 
@@ -548,16 +542,7 @@ def stop(context):
 
         joinery_command.unregister_joinery_command(ui, PANEL_ID)
         kerf_command.unregister_kerf_command(ui, PANEL_ID)
-
-        panel = ui.allToolbarPanels.itemById(PANEL_ID)
-        if panel:
-            cntrl = panel.controls.itemById(CMD_ID)
-            if cntrl:
-                cntrl.deleteMe()
-
-        cmd_def = ui.commandDefinitions.itemById(CMD_ID)
-        if cmd_def:
-            cmd_def.deleteMe()
+        fusion_ui.unregister_panel_command(ui, PANEL_ID, CMD_ID)
 
         _handlers.clear()
     except Exception:

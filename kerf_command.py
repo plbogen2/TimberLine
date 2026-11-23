@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Tuple
 import adsk.core
 import adsk.fusion
 
+import fusion_ui
 import kerf_planner
 import lumber_catalog
 
@@ -18,14 +19,15 @@ KERF_CMD_DESC = (
     "accounting for saw blade kerf."
 )
 
-_TOL_IN = 0.03
+LUMBER_MATCH_TOL_IN = 0.03
+SHEET_MATCH_TOL_IN = 0.015
 
 
 def _match_lumber(d0_in: float, d1_in: float) -> Optional[lumber_catalog.LumberSize]:
     for item in lumber_catalog.LUMBER_SIZES:
         if (
-            abs(d0_in - item.thickness_in) <= _TOL_IN
-            and abs(d1_in - item.width_in) <= _TOL_IN
+            abs(d0_in - item.thickness_in) <= LUMBER_MATCH_TOL_IN
+            and abs(d1_in - item.width_in) <= LUMBER_MATCH_TOL_IN
         ):
             return item
     return None
@@ -33,7 +35,7 @@ def _match_lumber(d0_in: float, d1_in: float) -> Optional[lumber_catalog.LumberS
 
 def _match_sheet(d0_in: float) -> Optional[lumber_catalog.SheetThickness]:
     for item in lumber_catalog.SHEET_THICKNESSES:
-        if abs(d0_in - item.thickness_in) <= 0.015:
+        if abs(d0_in - item.thickness_in) <= SHEET_MATCH_TOL_IN:
             return item
     return None
 
@@ -192,30 +194,17 @@ def register_kerf_command(
     addin_dir: str,
     handlers: list,
 ) -> None:
-    res_dir = os.path.join(addin_dir, "resources", "KerfIcon")
-    resource_arg = res_dir if os.path.isdir(res_dir) else ""
-    cmd_def = ui.commandDefinitions.itemById(KERF_CMD_ID)
-    if not cmd_def:
-        cmd_def = ui.commandDefinitions.addButtonDefinition(
-            KERF_CMD_ID, KERF_CMD_NAME, KERF_CMD_DESC, resource_arg
-        )
-    on_created = KerfCommandCreatedHandler(handlers)
-    cmd_def.commandCreated.add(on_created)
-    handlers.append(on_created)
-
-    panel = ui.allToolbarPanels.itemById(panel_id)
-    if panel and not panel.controls.itemById(KERF_CMD_ID):
-        cntrl = panel.controls.addCommand(cmd_def)
-        cntrl.isPromotedByDefault = True
-        cntrl.isPromoted = True
+    fusion_ui.register_panel_command(
+        ui=ui,
+        panel_id=panel_id,
+        cmd_id=KERF_CMD_ID,
+        cmd_name=KERF_CMD_NAME,
+        cmd_desc=KERF_CMD_DESC,
+        resource_dir=os.path.join(addin_dir, "resources", "KerfIcon"),
+        created_handler_factory=lambda: KerfCommandCreatedHandler(handlers),
+        handlers=handlers,
+    )
 
 
 def unregister_kerf_command(ui: adsk.core.UserInterface, panel_id: str) -> None:
-    panel = ui.allToolbarPanels.itemById(panel_id)
-    if panel:
-        cntrl = panel.controls.itemById(KERF_CMD_ID)
-        if cntrl:
-            cntrl.deleteMe()
-    cmd_def = ui.commandDefinitions.itemById(KERF_CMD_ID)
-    if cmd_def:
-        cmd_def.deleteMe()
+    fusion_ui.unregister_panel_command(ui, panel_id, KERF_CMD_ID)
