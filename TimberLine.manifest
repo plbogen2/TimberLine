@@ -1,0 +1,16 @@
+{
+  "autodeskProduct": "Fusion",
+  "type": "add-in",
+  "id": "a7e3c912-4b8d-4f1e-9c2a-8d7e6f5a4b3c",
+  "author": "Antigravity",
+  "description": {
+    "": "TimberLine: Lumber-first woodworking CAD for Autodesk Fusion (dimensional lumber, sheet stock, joinery, and kerf cut planning)."
+  },
+  "version": "1.0.0",
+  "runOnStartup": true,
+  "supportedOS": "windows|mac",
+  "editEnabled": true,
+  "source": {
+    "python": "TimberLine.py"
+  }
+}
