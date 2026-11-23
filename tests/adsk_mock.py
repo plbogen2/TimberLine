@@ -46,7 +46,7 @@ class FakeDropDownInput:
 
 def _parse_expr_cm(expr: str) -> float:
     s = str(expr).strip()
-    m = re.match(r"^([0-9]+(?:\.[0-9]+)?|\d+/\d+)\s*(in|cm|mm|ft)?$", s)
+    m = re.match(r"^([0-9]+(?:\.[0-9]+)?|\d+/\d+)\s*(in|cm|mm|ft|deg)?$", s)
     if not m:
         return 0.0
     num_str, unit = m.group(1), m.group(2) or "cm"
@@ -61,6 +61,8 @@ def _parse_expr_cm(expr: str) -> float:
         return val / 10.0
     if unit == "ft":
         return val * 12.0 * 2.54
+    if unit == "deg":
+        return val * (3.141592653589793 / 180.0)
     return val
 
 

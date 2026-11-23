@@ -49,7 +49,7 @@ class TestAttachPlanner(unittest.TestCase):
         )
         self.assertAlmostEqual(plan_t.cross_section_rect[3], 8.89)
 
-    def test_miter_and_half_lap_all_four_edges(self):
+    def test_miter_half_lap_rabbet_and_dado_all_edges(self):
         for edge_p0, edge_p1 in [
             ((0.0, 0.0), (0.0, 8.89)),
             ((243.84, 0.0), (243.84, 8.89)),
@@ -58,9 +58,9 @@ class TestAttachPlanner(unittest.TestCase):
         ]:
             m_plan = attach_planner.compute_attach_plan(
                 self.bounds, edge_p0, edge_p1, self.two_by_four, self.len_cm,
-                existing_depth_cm=self.depth_cm, joint_type="Miter (45°)",
+                existing_depth_cm=self.depth_cm, joint_type="Miter", outer_angle_deg=120.0,
             )
-            self.assertAlmostEqual(m_plan.start_z_cm, -self.depth_cm)
+            self.assertAlmostEqual(m_plan.outer_angle_deg, 120.0)
             self.assertEqual(len(m_plan.miter_existing_tri), 1)
             self.assertEqual(len(m_plan.miter_new_tri), 1)
 
@@ -69,7 +69,21 @@ class TestAttachPlanner(unittest.TestCase):
                 existing_depth_cm=self.depth_cm, joint_type="Half-Lap",
             )
             self.assertAlmostEqual(hl_plan.start_z_cm, -self.depth_cm / 2.0)
-            self.assertAlmostEqual(hl_plan.existing_lap_depth_cm, self.depth_cm / 2.0)
+            self.assertAlmostEqual(hl_plan.existing_cut_depth_cm, self.depth_cm / 2.0)
+
+            rab_plan = attach_planner.compute_attach_plan(
+                self.bounds, edge_p0, edge_p1, self.two_by_four, self.len_cm,
+                existing_depth_cm=self.depth_cm, joint_type="Rabbet",
+                joint_depth_cm=lumber_catalog.inches_to_cm(0.375),
+            )
+            self.assertAlmostEqual(rab_plan.existing_cut_depth_cm, lumber_catalog.inches_to_cm(0.375))
+
+            dado_plan = attach_planner.compute_attach_plan(
+                self.bounds, edge_p0, edge_p1, self.two_by_four, self.len_cm,
+                existing_depth_cm=self.depth_cm, joint_type="Dado / Groove",
+                offset_cm=15.0,
+            )
+            self.assertAlmostEqual(dado_plan.existing_cut_depth_cm, lumber_catalog.inches_to_cm(0.375))
 
     def test_invalid_options_raise(self):
         with self.assertRaises(ValueError):
@@ -79,6 +93,11 @@ class TestAttachPlanner(unittest.TestCase):
         with self.assertRaises(ValueError):
             attach_planner.compute_attach_plan(
                 self.bounds, (0.0, 0.0), (0.0, 8.89), self.two_by_four, 10.0, 3.81, length_mode="Bad"
+            )
+        with self.assertRaises(ValueError):
+            attach_planner.compute_attach_plan(
+                self.bounds, (0.0, 0.0), (0.0, 8.89), self.two_by_four, 10.0, 3.81,
+                joint_type="Miter", outer_angle_deg=180.0,
             )
 
 

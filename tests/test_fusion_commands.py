@@ -423,18 +423,23 @@ class TestFusionCommands(unittest.TestCase):
         cmd.executePreview.handlers[0].notify(prev_args)
         self.assertTrue(prev_args.isValidResult)
 
+        chg = cmd.inputChanged.handlers[0]
+        chg.notify(types.SimpleNamespace(input=inputs.itemById("attachLength"), inputs=inputs))
+
         for jt in attach_planner.ATTACH_JOINT_TYPES:
             inputs.itemById("attachJointType").select(jt)
+            chg.notify(types.SimpleNamespace(input=inputs.itemById("attachJointType"), inputs=inputs))
             cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
-        self.assertGreaterEqual(len(operation_log.SESSION_LOG.entries()), 3)
+        self.assertGreaterEqual(len(operation_log.SESSION_LOG.entries()), 5)
 
-        # Horizontal edge miter covers miter_axis_is_u=False branch
+        # Horizontal edge + non-90 outer angle miter covers miter_axis_is_u=False & tilt branch
         horiz_edge = types.SimpleNamespace(
             startVertex=types.SimpleNamespace(geometry=FakePoint3D(0.0, 0.0, 0.0)),
             endVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 0.0, 0.0)),
         )
         inputs.itemById("attachEdge").set_entities([horiz_edge])
-        inputs.itemById("attachJointType").select("Miter (45°)")
+        inputs.itemById("attachJointType").select("Miter")
+        inputs.itemById("attachOuterAngle").expression = "120 deg"
         cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
         inputs.itemById("attachEdge").set_entities([edge])
 
@@ -462,6 +467,9 @@ class TestFusionCommands(unittest.TestCase):
         )
         attach_command.AttachExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
         attach_command.AttachPreviewHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        attach_command.AttachInputChangedHandler().notify(
+            types.SimpleNamespace(input=types.SimpleNamespace(id="attachJointType"), inputs=bad_cmd.commandInputs)
+        )
         bad_v_args = types.SimpleNamespace(inputs=bad_cmd.commandInputs, areInputsValid=True)
         attach_command.AttachValidateHandler().notify(bad_v_args)
         self.assertFalse(bad_v_args.areInputsValid)

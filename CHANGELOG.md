@@ -2,6 +2,14 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.4.0] - 2026-11-22
+### Added
+- **Rabbet** and **Dado / Groove** corner joints in **Attach Board** (with configurable **Joint Depth** and **Offset from Edge**).
+- Configurable **Outer Angle** (e.g., `90 deg`, `120 deg`, `60 deg`) for **Miter** joints in **Attach Board**.
+
+### Fixed
+- **Half-Lap** in **Attach Board** now uses an explicit **Lap Depth** (default `0.75 in`) instead of deriving half of the full board length on end faces.
+
 ## [1.3.4] - 2026-11-22
 ### Fixed
 - Automatically remove any legacy promoted TimberLine buttons from `SolidCreatePanel` so commands appear only in the dedicated **TimberLine** section.

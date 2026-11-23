@@ -2,6 +2,7 @@
 
 import os
 import traceback
+from typing import Dict, List, Tuple
 
 import adsk.core
 import adsk.fusion
@@ -15,8 +16,21 @@ ATTACH_CMD_ID = "TimberLineAttachCmd"
 ATTACH_CMD_NAME = "Attach Board"
 ATTACH_CMD_DESC = (
     "Attach a new board extending outward from an existing board's face and edge "
-    "with a Butt, 45° Miter, or Half-Lap joint."
+    "with a Butt, Half-Lap, Rabbet, Dado / Groove, or angled Miter joint."
 )
+
+_ATTACH_PARAM_IDS = ("attachJointDepth", "attachOffset", "attachOuterAngle")
+
+_ATTACH_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
+    "Butt (Flush)": [],
+    "Half-Lap": [("attachJointDepth", "Lap Depth", "0.75 in")],
+    "Rabbet": [("attachJointDepth", "Rabbet Depth", "0.375 in")],
+    "Dado / Groove": [
+        ("attachOffset", "Offset from Edge", "6 in"),
+        ("attachJointDepth", "Dado Depth", "0.375 in"),
+    ],
+    "Miter": [("attachOuterAngle", "Outer Angle", "90 deg")],
+}
 
 
 def _face_bounds_2d(
@@ -170,6 +184,17 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
         inputs.itemById("attachNewComp")
     ).value
 
+    joint_depth_cm = adsk.core.ValueCommandInput.cast(
+        inputs.itemById("attachJointDepth")
+    ).value
+    offset_cm = adsk.core.ValueCommandInput.cast(
+        inputs.itemById("attachOffset")
+    ).value
+    angle_rad = adsk.core.ValueCommandInput.cast(
+        inputs.itemById("attachOuterAngle")
+    ).value
+    outer_angle_deg = angle_rad * (180.0 / 3.141592653589793) if angle_rad > 0 else 90.0
+
     ref_sketch = existing_comp.sketches.add(face)
     bounds = _face_bounds_2d(ref_sketch, face)
     p0 = ref_sketch.modelToSketchSpace(edge.startVertex.geometry)
@@ -187,6 +212,9 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
         joint_type=joint_type,
         length_mode=length_mode,
         flip_along_edge=flip_dir,
+        joint_depth_cm=joint_depth_cm,
+        offset_cm=offset_cm,
+        outer_angle_deg=outer_angle_deg,
     )
     board_name = lumber_catalog.format_component_name(
         lumber.nominal, plan.new_board_length_cm
@@ -204,26 +232,34 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
     else:
         target_comp = existing_comp
 
-    # Cut half-lap into existing board if needed
-    if plan.existing_lap_depth_cm > 0 and existing_body:
-        lap_sk = existing_comp.sketches.add(face)
-        lap_sk.name = "Half-Lap Existing"
+    # Cut pocket/lap/rabbet/dado into existing board
+    if plan.existing_cut_depth_cm > 0 and existing_body:
+        cut_sk = existing_comp.sketches.add(face)
+        cut_sk.name = f"{joint_type} Cut"
         u0, v0, u1, v1 = plan.cross_section_rect
-        lap_sk.sketchCurves.sketchLines.addTwoPointRectangle(
+        cut_sk.sketchCurves.sketchLines.addTwoPointRectangle(
             adsk.core.Point3D.create(u0, v0, 0.0),
             adsk.core.Point3D.create(u1, v1, 0.0),
         )
         _cut_profiles(
-            existing_comp, lap_sk, existing_body, -plan.existing_lap_depth_cm
+            existing_comp, cut_sk, existing_body, -plan.existing_cut_depth_cm
         )
 
-    # Determine start plane for new board (face or offset behind face)
+    # Start plane for new board
     if abs(plan.start_z_cm) > 1e-6:
         p_in = target_comp.constructionPlanes.createInput()
         p_in.setByOffset(face, adsk.core.ValueInput.createByReal(plan.start_z_cm))
         start_plane = target_comp.constructionPlanes.add(p_in)
     else:
         start_plane = face
+
+    if joint_type == "Miter" and abs(plan.outer_angle_deg - 90.0) > 0.1:
+        tilt_deg = plan.outer_angle_deg - 90.0
+        tilt_in = target_comp.constructionPlanes.createInput()
+        tilt_in.setByAngle(
+            edge, adsk.core.ValueInput.createByString(f"{tilt_deg:g} deg"), start_plane
+        )
+        start_plane = target_comp.constructionPlanes.add(tilt_in)
 
     sk = target_comp.sketches.add(start_plane)
     sk.name = f"{lumber.nominal} Attached"
@@ -296,6 +332,27 @@ class AttachPreviewHandler(adsk.core.CommandEventHandler):
         try:
             _execute_attach(args.command.commandInputs, record_log=False)
             args.isValidResult = True
+        except Exception:
+            pass
+
+
+class AttachInputChangedHandler(adsk.core.InputChangedEventHandler):
+    def __init__(self):
+        super().__init__()
+
+    def notify(self, args: adsk.core.InputChangedEventArgs):
+        try:
+            if args.input.id != "attachJointType":
+                return
+            inputs = args.inputs
+            jt = adsk.core.DropDownCommandInput.cast(args.input).selectedItem.name
+            for pid in _ATTACH_PARAM_IDS:
+                inputs.itemById(pid).isVisible = False
+            for pid, label, expr in _ATTACH_UI_CONFIG.get(jt, []):
+                ctrl = adsk.core.ValueCommandInput.cast(inputs.itemById(pid))
+                ctrl.name = label
+                ctrl.expression = expr
+                ctrl.isVisible = True
         except Exception:
             pass
 
@@ -385,6 +442,25 @@ class AttachCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             for idx, jt in enumerate(attach_planner.ATTACH_JOINT_TYPES):
                 jt_dd.listItems.add(jt, idx == 0, "")
 
+            inputs.addValueInput(
+                "attachOffset",
+                "Offset from Edge",
+                "in",
+                adsk.core.ValueInput.createByString("6 in"),
+            ).isVisible = False
+            inputs.addValueInput(
+                "attachJointDepth",
+                "Joint Depth",
+                "in",
+                adsk.core.ValueInput.createByString("0.75 in"),
+            ).isVisible = False
+            inputs.addValueInput(
+                "attachOuterAngle",
+                "Outer Angle",
+                "deg",
+                adsk.core.ValueInput.createByString("90 deg"),
+            ).isVisible = False
+
             inputs.addBoolValueInput(
                 "attachOnEdge", "New Board On Edge", True, "", True
             )
@@ -402,6 +478,10 @@ class AttachCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             on_prev = AttachPreviewHandler()
             cmd.executePreview.add(on_prev)
             self._handlers.append(on_prev)
+
+            on_chg = AttachInputChangedHandler()
+            cmd.inputChanged.add(on_chg)
+            self._handlers.append(on_chg)
 
             on_val = AttachValidateHandler()
             cmd.validateInputs.add(on_val)
