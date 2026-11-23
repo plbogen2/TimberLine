@@ -232,6 +232,27 @@ class TestFusionCommands(unittest.TestCase):
             chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
             exe.notify(types.SimpleNamespace(command=cmd))
 
+        # Reference Board auto-sizing for Dado / Groove, Rabbet, and cross Half-Lap
+        inputs.itemById("jointEdge").set_entities([edge])
+        mating_board = make_fake_body("Shelf", 1.825625, 20.0, 10.0)
+        mating_board.boundingBox = types.SimpleNamespace(
+            minPoint=FakePoint3D(3.0, 0.0, 0.0),
+            maxPoint=FakePoint3D(4.825625, 20.0, 5.0),
+        )
+        inputs.itemById("refBoard").set_entities([mating_board])
+        for jt in ("Dado / Groove", "Half-Lap", "Rabbet"):
+            inputs.itemById("jointType").select(jt)
+            chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
+            chg.notify(types.SimpleNamespace(input=inputs.itemById("refBoard"), inputs=inputs))
+            self.assertAlmostEqual(inputs.itemById("jointWidth").value, 1.825625)
+            exe.notify(types.SimpleNamespace(command=cmd))
+        self.assertTrue(inputs.itemById("jointOffset").isVisible or jt == "Rabbet")
+
+        # Non-board-ref joint ignores _apply_board_reference
+        inputs.itemById("jointType").select("Tenon")
+        chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
+        chg.notify(types.SimpleNamespace(input=inputs.itemById("refBoard"), inputs=inputs))
+
     def test_kerf_command_execute_and_export(self):
         handlers = []
         cmd = FakeCommand()

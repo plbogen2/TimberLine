@@ -118,6 +118,36 @@ class TestJoineryTools(unittest.TestCase):
         self.assertEqual(to_edge, (0.0, -1.0))
         self.assertEqual(centers, [(0.0, 2.0), (20.0, 2.0)])
 
+    def test_board_reference_params_all_edges(self):
+        bounds = (0.0, 0.0, 10.0, 20.0)
+        # Left edge (dado 3..4.8 -> offset=3, width=1.8)
+        off, w = joinery_tools.compute_board_reference_params(
+            bounds, (0.0, 0.0), (0.0, 20.0), (3.0, 0.0, 4.8, 20.0)
+        )
+        self.assertAlmostEqual(off, 3.0)
+        self.assertAlmostEqual(w, 1.8)
+
+        # Right edge (rabbet/dado 7..9 -> offset=1, width=2.0)
+        off, w = joinery_tools.compute_board_reference_params(
+            bounds, (10.0, 0.0), (10.0, 20.0), (7.0, 0.0, 9.0, 20.0)
+        )
+        self.assertAlmostEqual(off, 1.0)
+        self.assertAlmostEqual(w, 2.0)
+
+        # Bottom edge (dado 0..1.8 -> offset=0, width=1.8)
+        off, w = joinery_tools.compute_board_reference_params(
+            bounds, (0.0, 0.0), (10.0, 0.0), (0.0, 5.0, 10.0, 6.8)
+        )
+        self.assertAlmostEqual(off, 5.0)
+        self.assertAlmostEqual(w, 1.8)
+
+        # Top edge (offset from top=20 -> 20-16=4, width=2)
+        off, w = joinery_tools.compute_board_reference_params(
+            bounds, (0.0, 20.0), (10.0, 20.0), (0.0, 14.0, 10.0, 16.0)
+        )
+        self.assertAlmostEqual(off, 4.0)
+        self.assertAlmostEqual(w, 2.0)
+
 
 if __name__ == "__main__":
     unittest.main()

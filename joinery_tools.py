@@ -46,6 +46,40 @@ def compute_edge_strip_rect(
     return (u_min - overcut, v0, u_max + overcut, v1)
 
 
+def compute_board_reference_params(
+    face_bounds: Rect2D,
+    edge_p0: Point2D,
+    edge_p1: Point2D,
+    ref_bounds: Rect2D,
+) -> Tuple[float, float]:
+    """Compute ``(offset, width)`` on a face from a mating board's 2D bounds.
+
+    Measures perpendicular to ``edge_p0 -> edge_p1`` so selecting a mating
+    board auto-fills the exact rabbet width, dado offset+width, or lap length.
+    """
+    u_min, v_min, u_max, v_max = face_bounds
+    ru_min, rv_min, ru_max, rv_max = ref_bounds
+    du = abs(edge_p0[0] - edge_p1[0])
+    dv = abs(edge_p0[1] - edge_p1[1])
+
+    if du < dv:
+        u_edge = 0.5 * (edge_p0[0] + edge_p1[0])
+        width = max(0.0, ru_max - ru_min)
+        if abs(u_edge - u_min) <= abs(u_edge - u_max):
+            offset = max(0.0, ru_min - u_min)
+        else:
+            offset = max(0.0, u_max - ru_max)
+        return (offset, width)
+
+    v_edge = 0.5 * (edge_p0[1] + edge_p1[1])
+    width = max(0.0, rv_max - rv_min)
+    if abs(v_edge - v_min) <= abs(v_edge - v_max):
+        offset = max(0.0, rv_min - v_min)
+    else:
+        offset = max(0.0, v_max - rv_max)
+    return (offset, width)
+
+
 def compute_centered_rect(
     face_bounds: Rect2D,
     short_dim: float,

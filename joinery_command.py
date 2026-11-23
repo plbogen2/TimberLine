@@ -29,6 +29,7 @@ JOINT_TYPES = [
 ]
 
 _EDGE_REQUIRED_JOINTS = {"Rabbet", "Dado / Groove", "Half-Lap", "Pocket Holes (15°)"}
+_BOARD_REF_JOINTS = {"Rabbet", "Dado / Groove", "Half-Lap"}
 
 _ALL_PARAM_INPUT_IDS = (
     "jointWidth",
@@ -95,6 +96,73 @@ def _face_bounds_2d(
         us.append(pt.x)
         vs.append(pt.y)
     return (min(us), min(vs), max(us), max(vs))
+
+
+def _project_body_bounds_2d(
+    sketch: adsk.fusion.Sketch, body
+) -> joinery_tools.Rect2D:
+    bb = body.boundingBox
+    xs = (bb.minPoint.x, bb.maxPoint.x)
+    ys = (bb.minPoint.y, bb.maxPoint.y)
+    zs = (bb.minPoint.z, bb.maxPoint.z)
+    us = []
+    vs = []
+    for x in xs:
+        for y in ys:
+            for z in zs:
+                pt = sketch.modelToSketchSpace(adsk.core.Point3D.create(x, y, z))
+                us.append(pt.x)
+                vs.append(pt.y)
+    return (min(us), min(vs), max(us), max(vs))
+
+
+def _apply_board_reference(inputs: adsk.core.CommandInputs) -> None:
+    app = adsk.core.Application.get()
+    design = adsk.fusion.Design.cast(app.activeProduct)
+    if not design:
+        return
+    jt = adsk.core.DropDownCommandInput.cast(
+        inputs.itemById("jointType")
+    ).selectedItem.name
+    if jt not in _BOARD_REF_JOINTS:
+        return
+
+    face_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("jointFace"))
+    edge_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("jointEdge"))
+    ref_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("refBoard"))
+    if (
+        not face_sel
+        or not edge_sel
+        or not ref_sel
+        or face_sel.selectionCount == 0
+        or edge_sel.selectionCount == 0
+        or ref_sel.selectionCount == 0
+    ):
+        return
+
+    face = adsk.fusion.BRepFace.cast(face_sel.selection(0).entity)
+    edge = adsk.fusion.BRepEdge.cast(edge_sel.selection(0).entity)
+    ref_body = ref_sel.selection(0).entity
+    comp = _target_component_for_face(design, face)
+
+    sketch = comp.sketches.add(face)
+    bounds = _face_bounds_2d(sketch, face)
+    p0 = sketch.modelToSketchSpace(edge.startVertex.geometry)
+    p1 = sketch.modelToSketchSpace(edge.endVertex.geometry)
+    ref_bounds = _project_body_bounds_2d(sketch, ref_body)
+    sketch.deleteMe()
+
+    offset_cm, width_cm = joinery_tools.compute_board_reference_params(
+        bounds, (p0.x, p0.y), (p1.x, p1.y), ref_bounds
+    )
+    if width_cm > 0:
+        adsk.core.ValueCommandInput.cast(inputs.itemById("jointWidth")).value = width_cm
+    if jt in ("Dado / Groove", "Half-Lap"):
+        off_in = adsk.core.ValueCommandInput.cast(inputs.itemById("jointOffset"))
+        off_in.value = offset_cm
+        if jt == "Half-Lap" and offset_cm > 1e-4:
+            off_in.name = "Offset from Edge"
+            off_in.isVisible = True
 
 
 def _target_component_for_face(
@@ -313,7 +381,11 @@ def _execute_joinery(inputs: adsk.core.CommandInputs) -> None:
         p1 = sketch.modelToSketchSpace(edge.endVertex.geometry)
         sketch.deleteMe()
 
-        offset = _val("jointOffset") if joint_type == "Dado / Groove" else 0.0
+        ref_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("refBoard"))
+        use_offset = joint_type == "Dado / Groove" or (
+            joint_type == "Half-Lap" and ref_sel and ref_sel.selectionCount > 0
+        )
+        offset = _val("jointOffset") if use_offset else 0.0
         rect = joinery_tools.compute_edge_strip_rect(
             bounds, (p0.x, p0.y), (p1.x, p1.y), _val("jointWidth"), offset=offset
         )
@@ -382,15 +454,25 @@ class JoineryInputChangedHandler(adsk.core.InputChangedEventHandler):
 
     def notify(self, args: adsk.core.InputChangedEventArgs):
         try:
-            if args.input.id != "jointType":
-                return
             inputs = args.inputs
+            changed_id = args.input.id
+            if changed_id in ("refBoard", "jointEdge", "jointFace"):
+                _apply_board_reference(inputs)
+                return
+            if changed_id != "jointType":
+                return
             jt = adsk.core.DropDownCommandInput.cast(args.input).selectedItem.name
 
             edge_sel = adsk.core.SelectionCommandInput.cast(
                 inputs.itemById("jointEdge")
             )
             edge_sel.isVisible = jt in _EDGE_REQUIRED_JOINTS
+
+            ref_sel = adsk.core.SelectionCommandInput.cast(
+                inputs.itemById("refBoard")
+            )
+            if ref_sel:
+                ref_sel.isVisible = jt in _BOARD_REF_JOINTS
 
             for input_id in _ALL_PARAM_INPUT_IDS:
                 inputs.itemById(input_id).isVisible = False
@@ -402,6 +484,8 @@ class JoineryInputChangedHandler(adsk.core.InputChangedEventHandler):
                 if expr:
                     adsk.core.ValueCommandInput.cast(ctrl).expression = expr
                 ctrl.isVisible = True
+
+            _apply_board_reference(inputs)
         except Exception:
             pass
 
@@ -463,6 +547,14 @@ class JoineryCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             )
             edge_sel.addSelectionFilter("Edges")
             edge_sel.setSelectionLimits(0, 1)
+
+            ref_sel = inputs.addSelectionInput(
+                "refBoard",
+                "Reference Board",
+                "Optional: select mating board to auto-size width/offset",
+            )
+            ref_sel.addSelectionFilter("Bodies")
+            ref_sel.setSelectionLimits(0, 1)
 
             inputs.addValueInput(
                 "jointOffset",
