@@ -280,10 +280,10 @@ class TestFusionCommands(unittest.TestCase):
         self.assertIn(("str", "-75 deg"), angle_calls)
         self.assertTrue(any(val > 0 for _, val in offset_calls))
 
-        # Edge-less fallback for _target_component_for_face
+        # Edge-less fallback for target_component_for_face
         no_body_face = types.SimpleNamespace(vertices=face.vertices, body=None)
         self.assertIs(
-            joinery_command._target_component_for_face(self.design, no_body_face),
+            joinery_command.joinery_base.target_component_for_face(self.design, no_body_face),
             self.design.activeComponent,
         )
 

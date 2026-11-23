@@ -14,6 +14,7 @@ $itemsToCopy = @(
     "fusion_ui.py",
     "lumber_catalog.py",
     "joinery_tools.py",
+    "joinery",
     "joinery_command.py",
     "attach_planner.py",
     "attach_command.py",

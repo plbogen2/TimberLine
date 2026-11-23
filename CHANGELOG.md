@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.4.1] - 2026-11-22
+### Changed
+- Extracted each joinery technique into its own module under `joinery/` (`edge_cuts.py`, `housing_2board.py`, `mortise_tenon.py`, `pocket_holes.py`, `dowel_holes.py`, `base.py`) with a registry in `joinery/__init__.py`.
+
 ## [1.4.0] - 2026-11-22
 ### Added
 - **Rabbet** and **Dado / Groove** corner joints in **Attach Board** (with configurable **Joint Depth** and **Offset from Edge**).
