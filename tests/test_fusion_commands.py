@@ -186,6 +186,23 @@ class TestFusionCommands(unittest.TestCase):
             chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
             exe.notify(types.SimpleNamespace(command=cmd))
 
+        # Pocket holes on right edge triggers plane normal flip branch (dotProduct > 0)
+        right_edge = types.SimpleNamespace(
+            startVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 0.0, 0.0)),
+            endVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 20.0, 0.0)),
+        )
+        inputs.itemById("jointEdge").set_entities([right_edge])
+        inputs.itemById("jointType").select("Pocket Holes (15°)")
+        chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
+        exe.notify(types.SimpleNamespace(command=cmd))
+
+        # Edge-less fallback for _target_component_for_face
+        no_body_face = types.SimpleNamespace(vertices=face.vertices, body=None)
+        self.assertIs(
+            joinery_command._target_component_for_face(self.design, no_body_face),
+            self.design.activeComponent,
+        )
+
     def test_kerf_command_execute_and_export(self):
         handlers = []
         cmd = FakeCommand()
