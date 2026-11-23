@@ -107,6 +107,167 @@ def compute_centered_rect(
     )
 
 
+def compute_tongue_shoulder_rects(
+    face_bounds: Rect2D,
+    tongue_thick: float,
+    overcut: float = 0.01,
+) -> Tuple[Rect2D, Rect2D]:
+    """Compute the two shoulder cut rectangles leaving a centered tongue."""
+    u_min, v_min, u_max, v_max = face_bounds
+    face_u = u_max - u_min
+    face_v = v_max - v_min
+    if face_u >= face_v:
+        v_mid = 0.5 * (v_min + v_max)
+        half_t = 0.5 * tongue_thick
+        return (
+            (u_min - overcut, v_min - overcut, u_max + overcut, v_mid - half_t),
+            (u_min - overcut, v_mid + half_t, u_max + overcut, v_max + overcut),
+        )
+    u_mid = 0.5 * (u_min + u_max)
+    half_t = 0.5 * tongue_thick
+    return (
+        (u_min - overcut, v_min - overcut, u_mid - half_t, v_max + overcut),
+        (u_mid + half_t, v_min - overcut, u_max + overcut, v_max + overcut),
+    )
+
+
+def compute_centered_groove_rect(
+    face_bounds: Rect2D,
+    groove_thick: float,
+    overcut: float = 0.01,
+) -> Rect2D:
+    """Compute a centered full-length groove rectangle along the face's longer axis."""
+    u_min, v_min, u_max, v_max = face_bounds
+    face_u = u_max - u_min
+    face_v = v_max - v_min
+    if face_u >= face_v:
+        v_mid = 0.5 * (v_min + v_max)
+        half_t = 0.5 * groove_thick
+        return (u_min - overcut, v_mid - half_t, u_max + overcut, v_mid + half_t)
+    u_mid = 0.5 * (u_min + u_max)
+    half_t = 0.5 * groove_thick
+    return (u_mid - half_t, v_min - overcut, u_mid + half_t, v_max + overcut)
+
+
+def compute_finger_cut_rects(
+    face_bounds: Rect2D,
+    count: int,
+    cut_even: bool = True,
+    overcut: float = 0.01,
+) -> List[Rect2D]:
+    """Divide the face's longer axis into ``count`` fingers and return cut rects."""
+    if count <= 1:
+        return []
+    u_min, v_min, u_max, v_max = face_bounds
+    face_u = u_max - u_min
+    face_v = v_max - v_min
+    rects: List[Rect2D] = []
+
+    if face_u >= face_v:
+        step = face_u / count
+        for i in range(count):
+            if (i % 2 == 0) == cut_even:
+                x0 = u_min + i * step - (overcut if i == 0 else 0.0)
+                x1 = u_min + (i + 1) * step + (overcut if i == count - 1 else 0.0)
+                rects.append((x0, v_min - overcut, x1, v_max + overcut))
+        return rects
+
+    step = face_v / count
+    for i in range(count):
+        if (i % 2 == 0) == cut_even:
+            y0 = v_min + i * step - (overcut if i == 0 else 0.0)
+            y1 = v_min + (i + 1) * step + (overcut if i == count - 1 else 0.0)
+            rects.append((u_min - overcut, y0, u_max + overcut, y1))
+    return rects
+
+
+def compute_dovetail_cut_polygons(
+    face_bounds: Rect2D,
+    count: int,
+    depth: float,
+    slope_ratio: float = 7.0,
+    is_pins: bool = False,
+    overcut: float = 0.01,
+) -> List[List[Point2D]]:
+    """Compute trapezoidal cut polygons for dovetail tails or pins along the long axis."""
+    if count <= 0:
+        return []
+    u_min, v_min, u_max, v_max = face_bounds
+    face_u = u_max - u_min
+    face_v = v_max - v_min
+    long_span = max(face_u, face_v)
+    pitch = long_span / count
+    flare = min(depth / slope_ratio, pitch * 0.2)
+    polys: List[List[Point2D]] = []
+
+    # Generate alternating trapezoidal waste pockets between tails/pins
+    slots = count + 1 if not is_pins else count
+    for i in range(slots):
+        if not is_pins:
+            # Cut pockets at outer ends and between tails
+            c_left = -overcut if i == 0 else i * pitch - 0.25 * pitch
+            c_right = long_span + overcut if i == count else i * pitch + 0.25 * pitch
+            w_front_0 = max(-overcut, c_left - (0.0 if i == 0 else flare))
+            w_front_1 = min(long_span + overcut, c_right + (0.0 if i == count else flare))
+            w_back_0 = max(-overcut, c_left + (0.0 if i == 0 else flare))
+            w_back_1 = min(long_span + overcut, c_right - (0.0 if i == count else flare))
+        else:
+            # Cut tail sockets between pins
+            c_left = i * pitch + 0.25 * pitch
+            c_right = i * pitch + 0.75 * pitch
+            w_front_0 = c_left + flare
+            w_front_1 = c_right - flare
+            w_back_0 = c_left - flare
+            w_back_1 = c_right + flare
+
+        if face_u >= face_v:
+            polys.append([
+                (u_min + w_front_0, v_min - overcut),
+                (u_min + w_front_1, v_min - overcut),
+                (u_min + w_back_1, v_max + overcut),
+                (u_min + w_back_0, v_max + overcut),
+            ])
+        else:
+            polys.append([
+                (u_min - overcut, v_min + w_front_0),
+                (u_min - overcut, v_min + w_front_1),
+                (u_max + overcut, v_min + w_back_1),
+                (u_max + overcut, v_min + w_back_0),
+            ])
+    return polys
+
+
+def compute_biscuit_slot_rects(
+    face_bounds: Rect2D,
+    count: int,
+    edge_inset: float,
+    slot_len: float,
+    slot_thick: float,
+) -> List[Rect2D]:
+    """Compute centered rectangular biscuit slot profiles along the face's long axis."""
+    centers = compute_dowel_centers(face_bounds, count, edge_inset)
+    u_min, v_min, u_max, v_max = face_bounds
+    face_u = u_max - u_min
+    face_v = v_max - v_min
+    rects: List[Rect2D] = []
+    for cx, cy in centers:
+        if face_u >= face_v:
+            rects.append((
+                cx - 0.5 * slot_len,
+                cy - 0.5 * slot_thick,
+                cx + 0.5 * slot_len,
+                cy + 0.5 * slot_thick,
+            ))
+        else:
+            rects.append((
+                cx - 0.5 * slot_thick,
+                cy - 0.5 * slot_len,
+                cx + 0.5 * slot_thick,
+                cy + 0.5 * slot_len,
+            ))
+    return rects
+
+
 def compute_dowel_centers(
     face_bounds: Rect2D,
     count: int,

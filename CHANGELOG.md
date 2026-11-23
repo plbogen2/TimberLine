@@ -2,6 +2,14 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.5.0] - 2026-11-22
+### Added
+- **Bridle (Open Mortise)** (`joinery/bridle.py`)
+- **Tongue (Edge)** & **Groove / Spline** (`joinery/tongue_groove.py`)
+- **Box Joint (Even Slots)** & **Box Joint (Odd Slots)** (`joinery/box_joint.py`)
+- **Dovetail (Tails)** & **Dovetail (Pins)** (`joinery/dovetail.py`)
+- **Biscuit Slot** (`joinery/biscuit.py`)
+
 ## [1.4.1] - 2026-11-22
 ### Changed
 - Extracted each joinery technique into its own module under `joinery/` (`edge_cuts.py`, `housing_2board.py`, `mortise_tenon.py`, `pocket_holes.py`, `dowel_holes.py`, `base.py`) with a registry in `joinery/__init__.py`.

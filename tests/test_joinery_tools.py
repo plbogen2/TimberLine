@@ -148,6 +148,45 @@ class TestJoineryTools(unittest.TestCase):
         self.assertAlmostEqual(off, 4.0)
         self.assertAlmostEqual(w, 2.0)
 
+    def test_tongue_and_groove_both_orientations(self):
+        r1, r2 = joinery_tools.compute_tongue_shoulder_rects((0.0, 0.0, 20.0, 2.0), 0.5)
+        self.assertAlmostEqual(r1[3], 0.75)
+        self.assertAlmostEqual(r2[1], 1.25)
+
+        r1, r2 = joinery_tools.compute_tongue_shoulder_rects((0.0, 0.0, 2.0, 20.0), 0.5)
+        self.assertAlmostEqual(r1[2], 0.75)
+        self.assertAlmostEqual(r2[0], 1.25)
+
+        g1 = joinery_tools.compute_centered_groove_rect((0.0, 0.0, 20.0, 2.0), 0.5)
+        self.assertAlmostEqual(g1[1], 0.75)
+        self.assertAlmostEqual(g1[3], 1.25)
+
+        g2 = joinery_tools.compute_centered_groove_rect((0.0, 0.0, 2.0, 20.0), 0.5)
+        self.assertAlmostEqual(g2[0], 0.75)
+        self.assertAlmostEqual(g2[2], 1.25)
+
+    def test_box_finger_cuts(self):
+        self.assertEqual(joinery_tools.compute_finger_cut_rects((0.0, 0.0, 10.0, 2.0), 1), [])
+        evens = joinery_tools.compute_finger_cut_rects((0.0, 0.0, 10.0, 2.0), 5, cut_even=True)
+        odds = joinery_tools.compute_finger_cut_rects((0.0, 0.0, 10.0, 2.0), 5, cut_even=False)
+        self.assertEqual(len(evens), 3)
+        self.assertEqual(len(odds), 2)
+
+        portrait = joinery_tools.compute_finger_cut_rects((0.0, 0.0, 2.0, 10.0), 5, cut_even=True)
+        self.assertEqual(len(portrait), 3)
+
+    def test_dovetail_polygons_and_biscuit_slots(self):
+        self.assertEqual(joinery_tools.compute_dovetail_cut_polygons((0.0, 0.0, 10.0, 2.0), 0, 2.0), [])
+        tails = joinery_tools.compute_dovetail_cut_polygons((0.0, 0.0, 20.0, 2.0), 3, 2.0, is_pins=False)
+        pins = joinery_tools.compute_dovetail_cut_polygons((0.0, 0.0, 2.0, 20.0), 3, 2.0, is_pins=True)
+        self.assertEqual(len(tails), 4)
+        self.assertEqual(len(pins), 3)
+
+        b_land = joinery_tools.compute_biscuit_slot_rects((0.0, 0.0, 20.0, 2.0), 2, 2.0, 5.6, 0.4)
+        b_port = joinery_tools.compute_biscuit_slot_rects((0.0, 0.0, 2.0, 20.0), 2, 2.0, 5.6, 0.4)
+        self.assertEqual(len(b_land), 2)
+        self.assertEqual(len(b_port), 2)
+
 
 if __name__ == "__main__":
     unittest.main()

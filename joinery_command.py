@@ -27,6 +27,14 @@ JOINT_TYPES = [
     "Housing / Dado (2-Board)",
     "Tenon",
     "Mortise",
+    "Bridle (Open Mortise)",
+    "Tongue (Edge)",
+    "Groove / Spline",
+    "Box Joint (Even Slots)",
+    "Box Joint (Odd Slots)",
+    "Dovetail (Tails)",
+    "Dovetail (Pins)",
+    "Biscuit Slot",
     "Pocket Holes (15°)",
     "Dowel Holes",
 ]
@@ -72,6 +80,41 @@ _JOINT_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
         ("jointWidth", "Mortise Width", "0.5 in"),
         ("tenonWidth", "Mortise Length", "2.5 in"),
         ("jointDepth", "Mortise Depth", "1.625 in"),
+    ],
+    "Bridle (Open Mortise)": [
+        ("jointWidth", "Slot Width", "0.5 in"),
+        ("jointDepth", "Slot Depth", "1.5 in"),
+    ],
+    "Tongue (Edge)": [
+        ("jointWidth", "Tongue Thickness", "0.25 in"),
+        ("jointDepth", "Tongue Length", "0.375 in"),
+    ],
+    "Groove / Spline": [
+        ("jointWidth", "Groove Width", "0.25 in"),
+        ("jointDepth", "Groove Depth", "0.375 in"),
+    ],
+    "Box Joint (Even Slots)": [
+        ("holeCount", "", ""),
+        ("jointDepth", "Finger Depth", "0.75 in"),
+    ],
+    "Box Joint (Odd Slots)": [
+        ("holeCount", "", ""),
+        ("jointDepth", "Finger Depth", "0.75 in"),
+    ],
+    "Dovetail (Tails)": [
+        ("holeCount", "", ""),
+        ("jointDepth", "Board Thickness", "0.75 in"),
+    ],
+    "Dovetail (Pins)": [
+        ("holeCount", "", ""),
+        ("jointDepth", "Board Thickness", "0.75 in"),
+    ],
+    "Biscuit Slot": [
+        ("holeCount", "", ""),
+        ("holeInset", "", ""),
+        ("jointWidth", "Slot Length", "2.25 in"),
+        ("holeDia", "Slot Thickness", "0.157 in"),
+        ("jointDepth", "Slot Depth", "0.472 in"),
     ],
     "Pocket Holes (15°)": [
         ("holeCount", "", ""),
