@@ -203,6 +203,14 @@ class TestFusionCommands(unittest.TestCase):
             self.design.activeComponent,
         )
 
+        # InputChanged for non-jointType input is a no-op, and missing edge guards
+        chg.notify(types.SimpleNamespace(input=inputs.itemById("jointWidth"), inputs=inputs))
+        inputs.itemById("jointEdge").set_entities([])
+        for jt in ("Rabbet", "Pocket Holes (15°)"):
+            inputs.itemById("jointType").select(jt)
+            chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
+            exe.notify(types.SimpleNamespace(command=cmd))
+
     def test_kerf_command_execute_and_export(self):
         handlers = []
         cmd = FakeCommand()
