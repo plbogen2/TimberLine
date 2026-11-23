@@ -18,6 +18,8 @@ $itemsToCopy = @(
     "joinery_command.py",
     "attach_planner.py",
     "attach_command.py",
+    "corner_planner.py",
+    "corner_command.py",
     "operation_log.py",
     "operations_command.py",
     "kerf_planner.py",

@@ -17,6 +17,7 @@ if ADDIN_DIR not in sys.path:
     sys.path.insert(0, ADDIN_DIR)
 
 import attach_command  # noqa: E402
+import corner_command  # noqa: E402
 import fusion_ui  # noqa: E402
 import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
@@ -544,6 +545,7 @@ def run(context):
             handlers=_handlers,
         )
         attach_command.register_attach_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
+        corner_command.register_corner_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         joinery_command.register_joinery_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         kerf_command.register_kerf_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         operations_command.register_ops_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
@@ -560,6 +562,7 @@ def stop(context):
         ui = app.userInterface
 
         attach_command.unregister_attach_command(ui, PANEL_ID)
+        corner_command.unregister_corner_command(ui, PANEL_ID)
         joinery_command.unregister_joinery_command(ui, PANEL_ID)
         kerf_command.unregister_kerf_command(ui, PANEL_ID)
         operations_command.unregister_ops_command(ui, PANEL_ID)

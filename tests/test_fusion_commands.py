@@ -20,6 +20,8 @@ import adsk.core  # noqa: E402
 import TimberLine  # noqa: E402
 import attach_command  # noqa: E402
 import attach_planner  # noqa: E402
+import corner_command  # noqa: E402
+import corner_planner  # noqa: E402
 import fusion_ui  # noqa: E402
 import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
@@ -93,9 +95,9 @@ class TestFusionCommands(unittest.TestCase):
 
         TimberLine._handlers.clear()
         TimberLine.run({})
-        self.assertEqual(self.mock_ui.commandDefinitions.addButtonDefinition.call_count, 5)
-        self.assertEqual(mock_panel.controls.addCommand.call_count, 5)
-        self.assertEqual(len(TimberLine._handlers), 5)
+        self.assertEqual(self.mock_ui.commandDefinitions.addButtonDefinition.call_count, 6)
+        self.assertEqual(mock_panel.controls.addCommand.call_count, 6)
+        self.assertEqual(len(TimberLine._handlers), 6)
 
         # Unregister when items exist
         self.mock_ui.commandDefinitions.itemById.return_value = MagicMock()
@@ -513,6 +515,59 @@ class TestFusionCommands(unittest.TestCase):
         operations_command.OpsCommandCreatedHandler(handlers).notify(
             types.SimpleNamespace(command=bad_cmd)
         )
+
+    def test_convert_corner_command_all_types_and_guards(self):
+        operation_log.SESSION_LOG.clear()
+        handlers = []
+        cmd = FakeCommand()
+        corner_command.CornerCommandCreatedHandler(handlers).notify(
+            types.SimpleNamespace(command=cmd)
+        )
+        inputs = cmd.commandInputs
+        val = cmd.validateInputs.handlers[0]
+        v_args = types.SimpleNamespace(inputs=inputs, areInputsValid=True)
+        val.notify(v_args)
+        self.assertFalse(v_args.areInputsValid)
+
+        body_a = make_fake_body("RailA", 243.84, 3.81, 8.89, parent=self.design.rootComponent)
+        body_b = make_fake_body("RailB", 3.81, 121.92, 8.89, parent=self.design.rootComponent)
+        inputs.itemById("cornerBoardA").set_entities([body_a])
+        inputs.itemById("cornerBoardB").set_entities([body_a])
+        val.notify(v_args)
+        self.assertFalse(v_args.areInputsValid)  # same body invalid
+
+        corner_command._execute_convert_corner(inputs)  # same body guard
+
+        inputs.itemById("cornerBoardB").set_entities([body_b])
+        val.notify(v_args)
+        self.assertTrue(v_args.areInputsValid)
+
+        prev_args = types.SimpleNamespace(command=cmd, isValidResult=False)
+        cmd.executePreview.handlers[0].notify(prev_args)
+        self.assertTrue(prev_args.isValidResult)
+
+        inputs.itemById("cornerAxis").select("Z")
+        for jt in corner_planner.CORNER_CONVERT_TYPES:
+            inputs.itemById("cornerJointType").select(jt)
+            cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+        self.assertEqual(len(operation_log.SESSION_LOG.entries()), 5)
+
+        # No active design, missing selections, and error handlers
+        inputs.itemById("cornerBoardA").set_entities([])
+        corner_command._execute_convert_corner(inputs)
+        app = adsk.core.Application.get.return_value
+        app.activeProduct = None
+        corner_command._execute_convert_corner(inputs)
+        app.activeProduct = self.design
+
+        bad_cmd = types.SimpleNamespace(
+            commandInputs=types.SimpleNamespace(itemById=MagicMock(side_effect=RuntimeError("boom")))
+        )
+        corner_command.CornerExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        corner_command.CornerPreviewHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        bad_v_args = types.SimpleNamespace(inputs=bad_cmd.commandInputs, areInputsValid=True)
+        corner_command.CornerValidateHandler().notify(bad_v_args)
+        self.assertFalse(bad_v_args.areInputsValid)
 
 
 if __name__ == "__main__":
