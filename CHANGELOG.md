@@ -2,6 +2,13 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.6.0] - 2026-11-22
+### Added
+- **Scarf Joint** (`joinery/scarf.py`)
+- **Birdsmouth Notch** (`joinery/birdsmouth.py`)
+- **Bowtie / Butterfly Key** (`joinery/bowtie.py`)
+- **Sliding Dovetail** (`joinery/sliding_dovetail.py`)
+
 ## [1.5.0] - 2026-11-22
 ### Added
 - **Bridle (Open Mortise)** (`joinery/bridle.py`)

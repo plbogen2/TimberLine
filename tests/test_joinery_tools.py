@@ -187,6 +187,22 @@ class TestJoineryTools(unittest.TestCase):
         self.assertEqual(len(b_land), 2)
         self.assertEqual(len(b_port), 2)
 
+    def test_bowtie_and_birdsmouth_all_orientations(self):
+        bow_h = joinery_tools.compute_bowtie_polygon((0.0, 0.0, 20.0, 8.0), 2.0, 6.0)
+        bow_v = joinery_tools.compute_bowtie_polygon((0.0, 0.0, 8.0, 20.0), 2.0, 6.0)
+        self.assertEqual(len(bow_h), 6)
+        self.assertEqual(len(bow_v), 6)
+
+        bounds = (0.0, 0.0, 20.0, 10.0)
+        for p0, p1 in [
+            ((0.0, 0.0), (0.0, 10.0)),
+            ((20.0, 0.0), (20.0, 10.0)),
+            ((0.0, 0.0), (20.0, 0.0)),
+            ((0.0, 10.0), (20.0, 10.0)),
+        ]:
+            tri = joinery_tools.compute_birdsmouth_triangle(bounds, p0, p1, 2.0, 3.5, 1.5)
+            self.assertEqual(len(tri), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

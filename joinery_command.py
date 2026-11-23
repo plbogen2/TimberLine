@@ -23,8 +23,11 @@ JOINERY_CMD_DESC = (
 JOINT_TYPES = [
     "Rabbet",
     "Dado / Groove",
+    "Sliding Dovetail",
     "Half-Lap",
     "Housing / Dado (2-Board)",
+    "Scarf Joint",
+    "Birdsmouth Notch",
     "Tenon",
     "Mortise",
     "Bridle (Open Mortise)",
@@ -34,6 +37,7 @@ JOINT_TYPES = [
     "Box Joint (Odd Slots)",
     "Dovetail (Tails)",
     "Dovetail (Pins)",
+    "Bowtie / Butterfly Key",
     "Biscuit Slot",
     "Pocket Holes (15°)",
     "Dowel Holes",
@@ -66,11 +70,26 @@ _JOINT_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
         ("jointWidth", "Dado Width", "23/32 in"),
         ("jointDepth", "Depth", "0.375 in"),
     ],
+    "Sliding Dovetail": [
+        ("jointOffset", "Offset from Edge", "6 in"),
+        ("jointWidth", "Neck Width", "0.75 in"),
+        ("jointDepth", "Depth", "0.375 in"),
+    ],
     "Half-Lap": [
         ("jointWidth", "Lap Length", "3.5 in"),
         ("jointDepth", "Depth", "0.75 in"),
     ],
     "Housing / Dado (2-Board)": [],
+    "Scarf Joint": [
+        ("jointWidth", "Scarf Length", "6 in"),
+        ("jointDepth", "Cut Depth", "1.5 in"),
+    ],
+    "Birdsmouth Notch": [
+        ("jointOffset", "Offset from End", "4 in"),
+        ("jointWidth", "Seat Length", "3.5 in"),
+        ("tenonWidth", "Plumb Depth", "1.5 in"),
+        ("jointDepth", "Board Thickness", "1.5 in"),
+    ],
     "Tenon": [
         ("tenonThick", "Tenon Thickness", "0.5 in"),
         ("tenonWidth", "Tenon Width", "2.5 in"),
@@ -108,6 +127,11 @@ _JOINT_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
     "Dovetail (Pins)": [
         ("holeCount", "", ""),
         ("jointDepth", "Board Thickness", "0.75 in"),
+    ],
+    "Bowtie / Butterfly Key": [
+        ("jointWidth", "Bowtie Width", "1.0 in"),
+        ("tenonWidth", "Bowtie Length", "2.5 in"),
+        ("jointDepth", "Pocket Depth", "0.375 in"),
     ],
     "Biscuit Slot": [
         ("holeCount", "", ""),

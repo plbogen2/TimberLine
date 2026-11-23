@@ -268,6 +268,83 @@ def compute_biscuit_slot_rects(
     return rects
 
 
+def compute_bowtie_polygon(
+    face_bounds: Rect2D,
+    width: float,
+    length: float,
+    waist_ratio: float = 0.55,
+) -> List[Point2D]:
+    """Compute a centered 6-point hourglass bowtie/butterfly key polygon."""
+    u_min, v_min, u_max, v_max = face_bounds
+    uc = 0.5 * (u_min + u_max)
+    vc = 0.5 * (v_min + v_max)
+    half_l = 0.5 * length
+    half_w = 0.5 * width
+    half_waist = half_w * waist_ratio
+
+    if (u_max - u_min) >= (v_max - v_min):
+        return [
+            (uc - half_l, vc - half_w),
+            (uc, vc - half_waist),
+            (uc + half_l, vc - half_w),
+            (uc + half_l, vc + half_w),
+            (uc, vc + half_waist),
+            (uc - half_l, vc + half_w),
+        ]
+    return [
+        (uc - half_w, vc - half_l),
+        (uc - half_waist, vc),
+        (uc - half_w, vc + half_l),
+        (uc + half_w, vc + half_l),
+        (uc + half_waist, vc),
+        (uc + half_w, vc - half_l),
+    ]
+
+
+def compute_birdsmouth_triangle(
+    face_bounds: Rect2D,
+    edge_p0: Point2D,
+    edge_p1: Point2D,
+    offset: float,
+    seat_len: float,
+    plumb_depth: float,
+    overcut: float = 0.01,
+) -> List[Point2D]:
+    """Compute a 3-point triangular birdsmouth notch along a rafter edge."""
+    u_min, v_min, u_max, v_max = face_bounds
+    du = abs(edge_p0[0] - edge_p1[0])
+    dv = abs(edge_p0[1] - edge_p1[1])
+
+    if du < dv:
+        u_edge = 0.5 * (edge_p0[0] + edge_p1[0])
+        v_start = v_min + offset
+        if abs(u_edge - u_min) <= abs(u_edge - u_max):
+            return [
+                (u_min - overcut, v_start),
+                (u_min + plumb_depth, v_start),
+                (u_min - overcut, v_start + seat_len),
+            ]
+        return [
+            (u_max + overcut, v_start),
+            (u_max - plumb_depth, v_start),
+            (u_max + overcut, v_start + seat_len),
+        ]
+
+    v_edge = 0.5 * (edge_p0[1] + edge_p1[1])
+    u_start = u_min + offset
+    if abs(v_edge - v_min) <= abs(v_edge - v_max):
+        return [
+            (u_start, v_min - overcut),
+            (u_start, v_min + plumb_depth),
+            (u_start + seat_len, v_min - overcut),
+        ]
+    return [
+        (u_start, v_max + overcut),
+        (u_start, v_max - plumb_depth),
+        (u_start + seat_len, v_max + overcut),
+    ]
+
+
 def compute_dowel_centers(
     face_bounds: Rect2D,
     count: int,

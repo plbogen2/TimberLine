@@ -280,6 +280,18 @@ class TestFusionCommands(unittest.TestCase):
         self.assertIn(("str", "-75 deg"), angle_calls)
         self.assertTrue(any(val > 0 for _, val in offset_calls))
 
+        # Horizontal edge triggers du >= dv branch in Scarf and Sliding Dovetail
+        horiz_edge = types.SimpleNamespace(
+            startVertex=types.SimpleNamespace(geometry=FakePoint3D(0.0, 0.0, 0.0)),
+            endVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 0.0, 0.0)),
+        )
+        inputs.itemById("jointEdge").set_entities([horiz_edge])
+        for jt in ("Scarf Joint", "Sliding Dovetail"):
+            inputs.itemById("jointType").select(jt)
+            chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
+            exe.notify(types.SimpleNamespace(command=cmd))
+        inputs.itemById("jointEdge").set_entities([edge])
+
         # Edge-less fallback for target_component_for_face
         no_body_face = types.SimpleNamespace(vertices=face.vertices, body=None)
         self.assertIs(
