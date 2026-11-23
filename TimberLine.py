@@ -16,11 +16,13 @@ ADDIN_DIR = os.path.dirname(os.path.realpath(__file__))
 if ADDIN_DIR not in sys.path:
     sys.path.insert(0, ADDIN_DIR)
 
-import frame_command  # noqa: E402
+import attach_command  # noqa: E402
 import fusion_ui  # noqa: E402
 import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
 import lumber_catalog  # noqa: E402
+import operation_log  # noqa: E402
+import operations_command  # noqa: E402
 
 CMD_ID = "TimberLineCreateCmd"
 CMD_NAME = "Create Lumber"
@@ -235,6 +237,16 @@ class LumberExecuteHandler(adsk.core.CommandEventHandler):
         try:
             state = _get_inputs_state(args.command.commandInputs)
             _build_stock(state)
+            if state["is_sheet"]:
+                name = lumber_catalog.format_sheet_component_name(
+                    state["sheet"].name, state["sheet_width_cm"], state["length_cm"]
+                )
+                operation_log.SESSION_LOG.record("Create Sheet", name)
+            else:
+                name = lumber_catalog.format_component_name(
+                    state["lumber"].nominal, state["length_cm"]
+                )
+                operation_log.SESSION_LOG.record("Create Lumber", name)
         except Exception:
             ui = adsk.core.Application.get().userInterface
             if ui:
@@ -531,9 +543,10 @@ def run(context):
             created_handler_factory=LumberCommandCreatedHandler,
             handlers=_handlers,
         )
+        attach_command.register_attach_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         joinery_command.register_joinery_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
-        frame_command.register_frame_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         kerf_command.register_kerf_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
+        operations_command.register_ops_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
 
     except Exception:
         ui = adsk.core.Application.get().userInterface
@@ -546,9 +559,10 @@ def stop(context):
         app = adsk.core.Application.get()
         ui = app.userInterface
 
+        attach_command.unregister_attach_command(ui, PANEL_ID)
         joinery_command.unregister_joinery_command(ui, PANEL_ID)
-        frame_command.unregister_frame_command(ui, PANEL_ID)
         kerf_command.unregister_kerf_command(ui, PANEL_ID)
+        operations_command.unregister_ops_command(ui, PANEL_ID)
         fusion_ui.unregister_panel_command(ui, PANEL_ID, CMD_ID)
 
         _handlers.clear()

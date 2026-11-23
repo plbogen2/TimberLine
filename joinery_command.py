@@ -10,6 +10,7 @@ import adsk.fusion
 
 import fusion_ui
 import joinery_tools
+import operation_log
 
 JOINERY_CMD_ID = "TimberLineJoineryCmd"
 JOINERY_CMD_NAME = "Add Joinery"
@@ -482,6 +483,10 @@ class JoineryExecuteHandler(adsk.core.CommandEventHandler):
     def notify(self, args: adsk.core.CommandEventArgs):
         try:
             _execute_joinery(args.command.commandInputs)
+            jt = adsk.core.DropDownCommandInput.cast(
+                args.command.commandInputs.itemById("jointType")
+            ).selectedItem.name
+            operation_log.SESSION_LOG.record("Add Joinery", jt)
         except Exception:
             ui = adsk.core.Application.get().userInterface
             if ui:

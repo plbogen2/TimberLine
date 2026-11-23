@@ -22,8 +22,10 @@ $items = @(
     "lumber_catalog.py",
     "joinery_tools.py",
     "joinery_command.py",
-    "frame_planner.py",
-    "frame_command.py",
+    "attach_planner.py",
+    "attach_command.py",
+    "operation_log.py",
+    "operations_command.py",
     "kerf_planner.py",
     "kerf_command.py",
     "resources"

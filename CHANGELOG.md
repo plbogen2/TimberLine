@@ -2,6 +2,14 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.3.0] - 2026-11-22
+### Added
+- **Attach Board** command (`Solid → Create → Attach Board`) for iterative board → joint → next-board building with **Butt (Flush)** (exact length or total outer span), **Miter (45°)**, and **Half-Lap** corner joints.
+- **List Operations** command (`Solid → Create → List Operations`) displaying session TimberLine operations and Fusion's design timeline with `.txt` export.
+
+### Removed
+- Replaced rigid 4-sided **Create Frame** preset with the flexible **Attach Board** workflow.
+
 ## [1.2.0] - 2026-11-22
 ### Added
 - **Create Frame** command (`Solid → Create → Create Frame`) to build assembled 4-sided rectangular frames (e.g., `8' × 4'` table/workbench aprons) with automatic rail length adjustments for **Butt (Long Rails Full)**, **Butt (Short Rails Full)**, **Mitered (45°)**, and **Half-Lap Corners**.

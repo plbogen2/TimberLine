@@ -18,11 +18,13 @@ install_adsk_mocks()
 
 import adsk.core  # noqa: E402
 import TimberLine  # noqa: E402
-import frame_command  # noqa: E402
-import frame_planner  # noqa: E402
+import attach_command  # noqa: E402
+import attach_planner  # noqa: E402
 import fusion_ui  # noqa: E402
 import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
+import operation_log  # noqa: E402
+import operations_command  # noqa: E402
 
 
 def _make_fake_design():
@@ -91,9 +93,9 @@ class TestFusionCommands(unittest.TestCase):
 
         TimberLine._handlers.clear()
         TimberLine.run({})
-        self.assertEqual(self.mock_ui.commandDefinitions.addButtonDefinition.call_count, 4)
-        self.assertEqual(mock_panel.controls.addCommand.call_count, 4)
-        self.assertEqual(len(TimberLine._handlers), 4)
+        self.assertEqual(self.mock_ui.commandDefinitions.addButtonDefinition.call_count, 5)
+        self.assertEqual(mock_panel.controls.addCommand.call_count, 5)
+        self.assertEqual(len(TimberLine._handlers), 5)
 
         # Unregister when items exist
         self.mock_ui.commandDefinitions.itemById.return_value = MagicMock()
@@ -369,57 +371,86 @@ class TestFusionCommands(unittest.TestCase):
         TimberLine.run({})
         TimberLine.stop({})
 
-    def test_frame_command_all_styles_and_guards(self):
+    def test_attach_and_list_operations_commands(self):
+        operation_log.SESSION_LOG.clear()
         handlers = []
         cmd = FakeCommand()
-        frame_command.FrameCommandCreatedHandler(handlers).notify(
+        attach_command.AttachCommandCreatedHandler(handlers).notify(
             types.SimpleNamespace(command=cmd)
         )
         inputs = cmd.commandInputs
+        face, edge = _make_fake_face_and_edge(self.design.rootComponent)
+
         val = cmd.validateInputs.handlers[0]
-        v_args = types.SimpleNamespace(inputs=inputs, areInputsValid=False)
+        v_args = types.SimpleNamespace(inputs=inputs, areInputsValid=True)
+        val.notify(v_args)
+        self.assertFalse(v_args.areInputsValid)
+
+        inputs.itemById("attachFace").set_entities([face])
+        inputs.itemById("attachEdge").set_entities([edge])
         val.notify(v_args)
         self.assertTrue(v_args.areInputsValid)
 
-        # Invalid small dimension
-        inputs.itemById("frameWidth").expression = "2 in"
-        val.notify(v_args)
-        self.assertFalse(v_args.areInputsValid)
-        inputs.itemById("frameWidth").expression = "48 in"
-
-        # Preview + Execute across all 4 corner styles
         prev_args = types.SimpleNamespace(command=cmd, isValidResult=False)
         cmd.executePreview.handlers[0].notify(prev_args)
         self.assertTrue(prev_args.isValidResult)
 
-        for style in frame_planner.CORNER_STYLES:
-            inputs.itemById("frameCornerStyle").select(style)
+        for jt in attach_planner.ATTACH_JOINT_TYPES:
+            inputs.itemById("attachJointType").select(jt)
             cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+        self.assertGreaterEqual(len(operation_log.SESSION_LOG.entries()), 3)
 
-        # Part Design fallback (addNewComponent raises RuntimeError) & activeComponent mode
-        inputs.itemById("frameNewComp").value = False
+        # Part Design fallback & activeComponent mode
+        inputs.itemById("attachNewComp").value = False
         cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
-
-        inputs.itemById("frameNewComp").value = True
+        inputs.itemById("attachNewComp").value = True
         self.design.rootComponent.occurrences.addNewComponent = MagicMock(
             side_effect=RuntimeError("Part Design")
         )
         cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
 
-        # No active design & exception handlers
+        # No active design, zero length, missing selection, and error handlers
+        inputs.itemById("attachLength").expression = "0 in"
+        attach_command._execute_attach(inputs)
+        inputs.itemById("attachFace").set_entities([])
+        attach_command._execute_attach(inputs)
         app = adsk.core.Application.get.return_value
         app.activeProduct = None
-        frame_command._build_frame(inputs)
+        attach_command._execute_attach(inputs)
         app.activeProduct = self.design
 
         bad_cmd = types.SimpleNamespace(
             commandInputs=types.SimpleNamespace(itemById=MagicMock(side_effect=RuntimeError("boom")))
         )
-        frame_command.FrameExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
-        frame_command.FramePreviewHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        attach_command.AttachExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        attach_command.AttachPreviewHandler().notify(types.SimpleNamespace(command=bad_cmd))
         bad_v_args = types.SimpleNamespace(inputs=bad_cmd.commandInputs, areInputsValid=True)
-        frame_command.FrameValidateHandler().notify(bad_v_args)
+        attach_command.AttachValidateHandler().notify(bad_v_args)
         self.assertFalse(bad_v_args.areInputsValid)
+
+        # List Operations command with timeline + export + clear
+        tl_item = types.SimpleNamespace(name="Extrude1", isSuppressed=False)
+        self.design.timeline = FakeCollection([tl_item])
+        ops_cmd = FakeCommand()
+        operations_command.OpsCommandCreatedHandler(handlers).notify(
+            types.SimpleNamespace(command=ops_cmd)
+        )
+        self.assertIn("Extrude1", ops_cmd.commandInputs.itemById("opsSummary").text)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_path = os.path.join(tmp, "ops.txt")
+            dlg = MagicMock()
+            dlg.showSave.return_value = adsk.core.DialogResults.DialogOK
+            dlg.filename = out_path
+            self.mock_ui.createFileDialog.return_value = dlg
+
+            ops_cmd.commandInputs.itemById("opsExportTxt").value = True
+            ops_cmd.commandInputs.itemById("opsClearLog").value = True
+            ops_cmd.execute.handlers[0].notify(types.SimpleNamespace(command=ops_cmd))
+            self.assertTrue(os.path.isfile(out_path))
+            self.assertEqual(len(operation_log.SESSION_LOG.entries()), 0)
+
+        operations_command.OpsExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
 
 
 if __name__ == "__main__":
