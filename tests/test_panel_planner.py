@@ -65,6 +65,22 @@ class TestPanelPlanner(unittest.TestCase):
         with self.assertRaises(ValueError):
             panel_planner.compute_panel_plan(self.frame_4, self.ply, alignment="Bad")
 
+    def test_hexagonal_6_board_panel_generates_6_sided_polygon(self):
+        import math
+
+        r = 30.0
+        hex_boards = []
+        for i in range(6):
+            ang = math.radians(i * 60.0)
+            cx = r * math.cos(ang)
+            cy = r * math.sin(ang)
+            hex_boards.append((cx - 2.0, cy - 2.0, 0.0, cx + 2.0, cy + 2.0, 8.89))
+
+        plan = panel_planner.compute_panel_plan(
+            hex_boards, self.ply, depth_cm=self.depth, plane_choice="XY (Z-Normal)"
+        )
+        self.assertEqual(len(plan.polygon_uv), 6)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -19,7 +19,7 @@ ATTACH_CMD_DESC = (
     "with a Butt, Half-Lap, Rabbet, Dado / Groove, or angled Miter joint."
 )
 
-_ATTACH_PARAM_IDS = ("attachJointDepth", "attachOffset", "attachOuterAngle")
+_ATTACH_PARAM_IDS = ("attachJointDepth", "attachOffset")
 
 _ATTACH_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
     "Butt (Flush)": [],
@@ -29,7 +29,7 @@ _ATTACH_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
         ("attachOffset", "Offset from Edge", "6 in"),
         ("attachJointDepth", "Dado Depth", "0.375 in"),
     ],
-    "Miter": [("attachOuterAngle", "Outer Angle", "90 deg")],
+    "Miter": [],
 }
 
 
@@ -253,7 +253,7 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
     else:
         start_plane = face
 
-    if joint_type == "Miter" and abs(plan.outer_angle_deg - 90.0) > 0.1:
+    if abs(plan.outer_angle_deg - 90.0) > 0.1:
         tilt_deg = plan.outer_angle_deg - 90.0
         tilt_in = target_comp.constructionPlanes.createInput()
         tilt_in.setByAngle(
@@ -459,7 +459,7 @@ class AttachCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 "Outer Angle",
                 "deg",
                 adsk.core.ValueInput.createByString("90 deg"),
-            ).isVisible = False
+            )
 
             inputs.addBoolValueInput(
                 "attachOnEdge", "New Board On Edge", True, "", True

@@ -33,28 +33,58 @@ def _body_box_3d(body: adsk.fusion.BRepBody) -> panel_planner.Box3D:
 
 def _create_panel_body(
     comp: adsk.fusion.Component,
-    box: panel_planner.Box3D,
+    plan: panel_planner.PanelPlan,
     name: str,
 ) -> adsk.fusion.BRepBody:
-    x0, y0, z0, x1, y1, z1 = box
-    xy = comp.xYConstructionPlane
-    if abs(z0) > 1e-6:
+    x0, y0, z0, x1, y1, z1 = plan.panel_box
+    n_ax = plan.normal_axis
+    base_planes = (
+        comp.yZConstructionPlane,
+        comp.xZConstructionPlane,
+        comp.xYConstructionPlane,
+    )
+    base_plane = base_planes[n_ax]
+    w_lo = plan.panel_box[n_ax]
+    w_hi = plan.panel_box[n_ax + 3]
+
+    probe_sk = comp.sketches.add(base_plane)
+    p_orig = probe_sk.sketchToModelSpace(adsk.core.Point3D.create(0.0, 0.0, 0.0))
+    p_z = probe_sk.sketchToModelSpace(adsk.core.Point3D.create(0.0, 0.0, 1.0))
+    probe_sk.deleteMe()
+    normal_comps = (p_z.x - p_orig.x, p_z.y - p_orig.y, p_z.z - p_orig.z)
+    sign = 1.0 if normal_comps[n_ax] >= 0 else -1.0
+
+    if abs(w_lo) > 1e-6:
         p_in = comp.constructionPlanes.createInput()
-        p_in.setByOffset(xy, adsk.core.ValueInput.createByReal(z0))
+        p_in.setByOffset(base_plane, adsk.core.ValueInput.createByReal(sign * w_lo))
         plane = comp.constructionPlanes.add(p_in)
     else:
-        plane = xy
+        plane = base_plane
 
     sk = comp.sketches.add(plane)
     sk.name = f"{name} Profile"
-    sk.sketchCurves.sketchLines.addTwoPointRectangle(
-        adsk.core.Point3D.create(x0, y0, 0.0),
-        adsk.core.Point3D.create(x1, y1, 0.0),
-    )
+    span_axes = [ax for ax in (0, 1, 2) if ax != n_ax]
+    u_ax, v_ax = span_axes[0], span_axes[1]
+    pts = []
+    for u_val, v_val in plan.polygon_uv:
+        coords = [0.0, 0.0, 0.0]
+        coords[u_ax] = u_val
+        coords[v_ax] = v_val
+        coords[n_ax] = w_lo
+        p2 = sk.modelToSketchSpace(
+            adsk.core.Point3D.create(coords[0], coords[1], coords[2])
+        )
+        pts.append(adsk.core.Point3D.create(p2.x, p2.y, 0.0))
+    lines = sk.sketchCurves.sketchLines
+    for i in range(len(pts)):
+        lines.addByTwoPoints(pts[i], pts[(i + 1) % len(pts)])
+
     ext_in = comp.features.extrudeFeatures.createInput(
         sk.profiles.item(0), adsk.fusion.FeatureOperations.NewBodyFeatureOperation
     )
-    ext_in.setDistanceExtent(False, adsk.core.ValueInput.createByReal(z1 - z0))
+    ext_in.setDistanceExtent(
+        False, adsk.core.ValueInput.createByReal(sign * (w_hi - w_lo))
+    )
     feat = comp.features.extrudeFeatures.add(ext_in)
     body = feat.bodies.item(0)
     body.name = name
@@ -111,7 +141,7 @@ def _execute_fill_panel(
     )
     panel_name = f"{sheet.name} - {plan.width_in:g}x{plan.length_in:g} in"
     comp = boards[0].parentComponent or design.activeComponent
-    panel_body = _create_panel_body(comp, plan.panel_box, panel_name)
+    panel_body = _create_panel_body(comp, plan, panel_name)
 
     if depth_cm > 0:
         for b in boards:
@@ -173,10 +203,10 @@ class PanelCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
             sel = inputs.addSelectionInput(
                 "panelBoards",
                 "Surrounding Boards",
-                "Select 2 to 4 boards framing the space to fill",
+                "Select 2 or more boards framing the space to fill (e.g. 4 for box, 6 for hexagon)",
             )
             sel.addSelectionFilter("Bodies")
-            sel.setSelectionLimits(2, 4)
+            sel.setSelectionLimits(2, 0)
 
             sheet_dd = inputs.addDropDownCommandInput(
                 "panelSheetType",

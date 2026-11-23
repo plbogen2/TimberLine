@@ -65,8 +65,8 @@ def compute_attach_plan(
         raise ValueError(f"Unsupported joint type: {joint_type}")
     if length_mode not in LENGTH_MODES:
         raise ValueError(f"Unsupported length mode: {length_mode}")
-    if joint_type == "Miter" and not (10.0 <= outer_angle_deg <= 170.0):
-        raise ValueError("Miter outer angle must be between 10 and 170 degrees.")
+    if not (10.0 <= outer_angle_deg <= 170.0):
+        raise ValueError("Outer angle must be between 10 and 170 degrees.")
 
     u_min, v_min, u_max, v_max = face_bounds
     dim_along = lumber.thickness_cm if on_edge else lumber.width_cm

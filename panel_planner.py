@@ -1,6 +1,7 @@
 """Pure-math 3D planner for filling an opening between boards with a panel."""
 
 from dataclasses import dataclass
+import math
 from typing import List, Tuple
 
 import lumber_catalog
@@ -19,11 +20,13 @@ PANEL_ALIGNMENTS = (
 )
 
 Box3D = Tuple[float, float, float, float, float, float]  # (x0, y0, z0, x1, y1, z1)
+Point2D = Tuple[float, float]
 
 
 @dataclass(frozen=True)
 class PanelPlan:
     panel_box: Box3D
+    polygon_uv: Tuple[Point2D, ...]
     normal_axis: int
     width_in: float
     length_in: float
@@ -127,10 +130,47 @@ def compute_panel_plan(
         bounds_hi[1],
         bounds_hi[2],
     )
+    u_ax, v_ax = span_axes[0], span_axes[1]
+    polygon_uv = _compute_polygon_uv(board_boxes, u_ax, v_ax, box, depth_cm)
+
     return PanelPlan(
         panel_box=box,
+        polygon_uv=polygon_uv,
         normal_axis=n_ax,
         width_in=w_in,
         length_in=l_in,
         fits_max_sheet=fits,
     )
+
+
+def _compute_polygon_uv(
+    boxes: List[Box3D],
+    u_ax: int,
+    v_ax: int,
+    rect_box: Box3D,
+    depth_cm: float,
+) -> Tuple[Point2D, ...]:
+    """Return a rectangular footprint for <=4 axis-aligned boards, or an N-gon for 5+."""
+    if len(boxes) <= 4:
+        u0, v0 = rect_box[u_ax], rect_box[v_ax]
+        u1, v1 = rect_box[u_ax + 3], rect_box[v_ax + 3]
+        return ((u0, v0), (u1, v0), (u1, v1), (u0, v1))
+
+    # Order board centers radially around centroid for hexagonal / polygonal frames
+    centers = [
+        (0.5 * (b[u_ax] + b[u_ax + 3]), 0.5 * (b[v_ax] + b[v_ax + 3]), b)
+        for b in boxes
+    ]
+    cu = sum(c[0] for c in centers) / len(centers)
+    cv = sum(c[1] for c in centers) / len(centers)
+    ordered = sorted(centers, key=lambda c: math.atan2(c[1] - cv, c[0] - cu))
+
+    verts: List[Point2D] = []
+    for bx, by, b in ordered:
+        dx, dy = bx - cu, by - cv
+        dist = math.hypot(dx, dy) or 1.0
+        half_wall = 0.5 * min(b[u_ax + 3] - b[u_ax], b[v_ax + 3] - b[v_ax])
+        target_r = max(0.1, dist - half_wall + max(0.0, depth_cm))
+        scale = target_r / dist
+        verts.append((cu + dx * scale, cv + dy * scale))
+    return tuple(verts)

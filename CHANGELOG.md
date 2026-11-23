@@ -2,6 +2,11 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.9.0] - 2026-11-22
+### Added
+- **N-Board Polygonal Fill Panel:** **Fill Panel** now accepts 2 or more boards (unlimited max) and generates N-sided polygonal panels (e.g., **6-sided hexagonal**, **8-sided octagonal**) with automatic dados/rabbets into every surrounding board.
+- **Arbitrary Outer Angle for All Attach Joints:** **Outer Angle** (`10°–170°`) is now available for **Butt**, **Half-Lap**, **Rabbet**, **Dado**, and **Miter** in **Attach Board**.
+
 ## [1.8.0] - 2026-11-22
 ### Added
 - **Fill Panel** command (`TimberLine → Fill Panel`) to fill an opening between 2 to 4 boards with a sheet panel and automatically cut matching dados or rabbets into the surrounding boards.
