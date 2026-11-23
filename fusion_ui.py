@@ -28,6 +28,13 @@ def register_panel_command(
     cmd_def.commandCreated.add(on_created)
     handlers.append(on_created)
 
+    if panel_id != "SolidCreatePanel":
+        legacy_panel = ui.allToolbarPanels.itemById("SolidCreatePanel")
+        if legacy_panel:
+            legacy_ctrl = legacy_panel.controls.itemById(cmd_id)
+            if legacy_ctrl:
+                legacy_ctrl.deleteMe()
+
     panel = ui.allToolbarPanels.itemById(panel_id)
     if not panel:
         solid_tab = ui.allToolbarTabs.itemById("SolidTab")
@@ -47,6 +54,13 @@ def unregister_panel_command(
     cmd_id: str,
 ) -> None:
     """Remove a command button from a toolbar panel and delete its definition."""
+    if panel_id != "SolidCreatePanel":
+        legacy_panel = ui.allToolbarPanels.itemById("SolidCreatePanel")
+        if legacy_panel:
+            legacy_ctrl = legacy_panel.controls.itemById(cmd_id)
+            if legacy_ctrl:
+                legacy_ctrl.deleteMe()
+
     panel = ui.allToolbarPanels.itemById(panel_id)
     if panel:
         cntrl = panel.controls.itemById(cmd_id)

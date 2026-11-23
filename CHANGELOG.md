@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.3.4] - 2026-11-22
+### Fixed
+- Automatically remove any legacy promoted TimberLine buttons from `SolidCreatePanel` so commands appear only in the dedicated **TimberLine** section.
+
 ## [1.3.3] - 2026-11-22
 ### Changed
 - Placed all 5 TimberLine commands (**Create Lumber**, **Attach Board**, **Add Joinery**, **Cut List & Kerf**, **List Operations**) into their own dedicated **TimberLine** toolbar panel on the **Solid** tab.
