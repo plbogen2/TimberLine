@@ -10,11 +10,11 @@ $rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 # 1. Update VERSION
 Set-Content -Path (Join-Path $rootDir "VERSION") -Value $Version -Encoding UTF8
 
-# 2. Update TimberLine.manifest
+# 2. Update TimberLine.manifest (regex preserves empty-key description object in PS 5.1)
 $manifestPath = Join-Path $rootDir "TimberLine.manifest"
-$manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
-$manifest.version = $Version
-$manifest | ConvertTo-Json -Depth 5 | Set-Content -Path $manifestPath -Encoding UTF8
+$manifestContent = Get-Content $manifestPath -Raw
+$manifestContent = $manifestContent -replace '("version"\s*:\s*)"[^"]+"', "`$1`"$Version`""
+[System.IO.File]::WriteAllText($manifestPath, $manifestContent, [System.Text.UTF8Encoding]::new($false))
 
 # 3. Update PackageContents.xml
 $pkgPath = Join-Path $rootDir "PackageContents.xml"
