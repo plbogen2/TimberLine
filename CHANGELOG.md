@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.2.0] - 2026-11-22
+### Added
+- **Create Frame** command (`Solid → Create → Create Frame`) to build assembled 4-sided rectangular frames (e.g., `8' × 4'` table/workbench aprons) with automatic rail length adjustments for **Butt (Long Rails Full)**, **Butt (Short Rails Full)**, **Mitered (45°)**, and **Half-Lap Corners**.
+
 ## [1.1.0] - 2026-11-22
 ### Added
 - **Sheet Stock** support (Plywood, MDF, Hardboard, Baltic Birch) with per-material max-sheet validation and presets.

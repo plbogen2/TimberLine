@@ -16,6 +16,7 @@ ADDIN_DIR = os.path.dirname(os.path.realpath(__file__))
 if ADDIN_DIR not in sys.path:
     sys.path.insert(0, ADDIN_DIR)
 
+import frame_command  # noqa: E402
 import fusion_ui  # noqa: E402
 import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
@@ -531,6 +532,7 @@ def run(context):
             handlers=_handlers,
         )
         joinery_command.register_joinery_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
+        frame_command.register_frame_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         kerf_command.register_kerf_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
 
     except Exception:
@@ -545,6 +547,7 @@ def stop(context):
         ui = app.userInterface
 
         joinery_command.unregister_joinery_command(ui, PANEL_ID)
+        frame_command.unregister_frame_command(ui, PANEL_ID)
         kerf_command.unregister_kerf_command(ui, PANEL_ID)
         fusion_ui.unregister_panel_command(ui, PANEL_ID, CMD_ID)
 

@@ -413,6 +413,7 @@ def install_adsk_mocks():
     fusion_mod.Design = _Castable
     fusion_mod.BRepFace = _Castable
     fusion_mod.BRepEdge = _Castable
+    fusion_mod.BRepBody = MagicMock
     fusion_mod.Component = MagicMock
     fusion_mod.Sketch = MagicMock
     fusion_mod.ExtrudeFeature = MagicMock
