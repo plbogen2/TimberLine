@@ -208,6 +208,18 @@ class TestFusionCommands(unittest.TestCase):
             exe.notify(types.SimpleNamespace(command=cmd))
 
         # Pocket holes on right edge triggers plane normal flip branch (dotProduct > 0)
+        # and verifies 75-deg perpendicular plane + outward offset for 15-deg drill path.
+        angle_calls = []
+        offset_calls = []
+        orig_create_plane_in = self.design.rootComponent.constructionPlanes.createInput
+
+        def _spy_plane_input():
+            return types.SimpleNamespace(
+                setByAngle=lambda _l, a, _p: angle_calls.append(a),
+                setByOffset=lambda _p, d: offset_calls.append(d),
+            )
+
+        self.design.rootComponent.constructionPlanes.createInput = _spy_plane_input
         right_edge = types.SimpleNamespace(
             startVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 0.0, 0.0)),
             endVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 20.0, 0.0)),
@@ -216,6 +228,10 @@ class TestFusionCommands(unittest.TestCase):
         inputs.itemById("jointType").select("Pocket Holes (15°)")
         chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
         exe.notify(types.SimpleNamespace(command=cmd))
+        self.design.rootComponent.constructionPlanes.createInput = orig_create_plane_in
+        self.assertIn(("str", "75 deg"), angle_calls)
+        self.assertIn(("str", "-75 deg"), angle_calls)
+        self.assertTrue(any(val > 0 for _, val in offset_calls))
 
         # Edge-less fallback for _target_component_for_face
         no_body_face = types.SimpleNamespace(vertices=face.vertices, body=None)

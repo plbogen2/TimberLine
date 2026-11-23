@@ -78,7 +78,7 @@ _JOINT_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
         ("holeInset", "", ""),
         ("holeDia", "Pocket Dia", "0.375 in"),
         ("pilotDia", "", ""),
-        ("jointDepth", "Pocket Depth", "1.125 in"),
+        ("jointDepth", "Pocket Depth", "1.0 in"),
     ],
     "Dowel Holes": [
         ("holeCount", "", ""),
@@ -319,7 +319,9 @@ def _cut_pocket_holes(
 
     planes = comp.constructionPlanes
     plane_input = planes.createInput()
-    plane_input.setByAngle(line, adsk.core.ValueInput.createByString("15 deg"), face)
+    # A 15-degree drill path from the face means the plane perpendicular to the drill
+    # is tilted 75 degrees (90 - 15) from the face.
+    plane_input.setByAngle(line, adsk.core.ValueInput.createByString("75 deg"), face)
     angled_plane = planes.add(plane_input)
 
     # Cut direction is -normal; ensure it points toward the selected edge.
@@ -327,9 +329,16 @@ def _cut_pocket_holes(
         angled_plane.deleteMe()
         plane_input = planes.createInput()
         plane_input.setByAngle(
-            line, adsk.core.ValueInput.createByString("-15 deg"), face
+            line, adsk.core.ValueInput.createByString("-75 deg"), face
         )
         angled_plane = planes.add(plane_input)
+
+    # Offset the drill start plane outward along +normal so the full bore
+    # enters cleanly through the face without leaving an uncut lip.
+    back_offset_cm = (pocket_dia_cm / 2.0) + 0.5
+    off_input = planes.createInput()
+    off_input.setByOffset(angled_plane, adsk.core.ValueInput.createByReal(back_offset_cm))
+    start_plane = planes.add(off_input)
 
     centers_3d = [
         base_sketch.sketchToModelSpace(adsk.core.Point3D.create(cx, cy, 0.0))
@@ -337,11 +346,16 @@ def _cut_pocket_holes(
     ]
 
     _cut_circles_on_plane(
-        comp, angled_plane, centers_3d, pocket_dia_cm, pocket_depth_cm, "Pocket Bore"
+        comp,
+        start_plane,
+        centers_3d,
+        pocket_dia_cm,
+        back_offset_cm + pocket_depth_cm,
+        "Pocket Bore",
     )
-    pilot_depth_cm = setback_cm / math.cos(math.radians(15.0)) + 1.0
+    pilot_depth_cm = back_offset_cm + setback_cm / math.cos(math.radians(15.0)) + 1.0
     _cut_circles_on_plane(
-        comp, angled_plane, centers_3d, pilot_dia_cm, pilot_depth_cm, "Pocket Pilot"
+        comp, start_plane, centers_3d, pilot_dia_cm, pilot_depth_cm, "Pocket Pilot"
     )
 
 

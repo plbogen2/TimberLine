@@ -337,7 +337,10 @@ def make_fake_component(name="Root"):
         )
 
     comp.constructionPlanes = types.SimpleNamespace(
-        createInput=lambda: types.SimpleNamespace(setByAngle=lambda _l, _a, _p: None),
+        createInput=lambda: types.SimpleNamespace(
+            setByAngle=lambda _l, _a, _p: None,
+            setByOffset=lambda _p, _d: None,
+        ),
         add=_add_plane,
     )
 
