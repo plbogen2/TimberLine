@@ -105,7 +105,10 @@ class TestFusionCommands(unittest.TestCase):
         self.assertEqual(len(TimberLine._handlers), 0)
 
         # Panel auto-creation when TimberLinePanel does not exist yet
-        self.mock_ui.allToolbarPanels.itemById.return_value = None
+        self.mock_ui.allToolbarPanels.itemById.side_effect = [
+            None, mock_panel, mock_panel, mock_panel, mock_panel,
+            mock_panel, mock_panel, mock_panel, mock_panel, mock_panel,
+        ]
         solid_tab = MagicMock()
         solid_tab.toolbarPanels.add.return_value = mock_panel
         self.mock_ui.allToolbarTabs.itemById.return_value = solid_tab
