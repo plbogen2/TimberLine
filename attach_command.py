@@ -358,7 +358,7 @@ class AttachCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 "attachFlip", "Flip Along Edge", True, "", False
             )
             inputs.addBoolValueInput(
-                "attachNewComp", "Create New Component", True, "", True
+                "attachNewComp", "Create New Component", True, "", False
             )
 
             on_exec = AttachExecuteHandler()

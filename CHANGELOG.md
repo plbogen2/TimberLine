@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.3.1] - 2026-11-22
+### Changed
+- **Create Lumber** and **Attach Board** now default **Create New Component** to `False`, creating each board as a named `BRepBody` directly in the active component.
+
 ## [1.3.0] - 2026-11-22
 ### Added
 - **Attach Board** command (`Solid → Create → Attach Board`) for iterative board → joint → next-board building with **Butt (Flush)** (exact length or total outer span), **Miter (45°)**, and **Half-Lap** corner joints.

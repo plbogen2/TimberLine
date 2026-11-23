@@ -499,9 +499,9 @@ class LumberCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 "lumberEase", 'Ease Edges (1/8" Radius)', True, "", False
             )
 
-            # 8. Create New Component
+            # 8. Create New Component (off by default: each board is a named body)
             inputs.addBoolValueInput(
-                "lumberNewComp", "Create New Component", True, "", True
+                "lumberNewComp", "Create New Component", True, "", False
             )
 
             on_execute = LumberExecuteHandler()
