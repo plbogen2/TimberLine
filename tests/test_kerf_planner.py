@@ -41,6 +41,47 @@ class TestKerfPlanner(unittest.TestCase):
         self.assertEqual(len(oversized), 0)
         self.assertGreaterEqual(len(sheets), 2)
 
+        # Rotated-only fit and wide sheet (sheet_width > sheet_length)
+        rot_cuts = [kerf_planner.SheetCut("Wide", 60.0, 20.0)]
+        sheets_rot, ov_rot = kerf_planner.pack_sheet_cuts(rot_cuts, 48.0, 96.0, kerf_in=0.125)
+        self.assertEqual(len(ov_rot), 0)
+        self.assertEqual(len(sheets_rot), 1)
+
+        wide_sheets, _ = kerf_planner.pack_sheet_cuts(
+            [kerf_planner.SheetCut("Small", 10.0, 20.0)], 96.0, 48.0, kerf_in=0.125
+        )
+        self.assertEqual(len(wide_sheets), 1)
+
+        # Normal-only fit (w <= sheet_w, l <= sheet_l, but l > sheet_w so cannot rotate)
+        norm_sheets, _ = kerf_planner.pack_sheet_cuts(
+            [kerf_planner.SheetCut("LongStrip", 10.0, 80.0)], 48.0, 96.0, kerf_in=0.125
+        )
+        self.assertEqual(len(norm_sheets), 1)
+
+        # Two cuts sharing the same shelf on one sheet (hits shelf cursor branch)
+        same_shelf_sheets, _ = kerf_planner.pack_sheet_cuts(
+            [
+                kerf_planner.SheetCut("S1", 20.0, 40.0),
+                kerf_planner.SheetCut("S2", 20.0, 40.0),
+            ],
+            48.0,
+            96.0,
+            kerf_in=0.125,
+        )
+        self.assertEqual(len(same_shelf_sheets), 1)
+
+        # Multi-shelf on single sheet
+        shelf_sheets, _ = kerf_planner.pack_sheet_cuts(
+            [
+                kerf_planner.SheetCut("S1", 30.0, 40.0),
+                kerf_planner.SheetCut("S2", 30.0, 40.0),
+            ],
+            48.0,
+            96.0,
+            kerf_in=0.125,
+        )
+        self.assertEqual(len(shelf_sheets), 1)
+
     def test_sheet_oversized_cut_flagged(self):
         cuts = [kerf_planner.SheetCut("Huge", 60.0, 60.0)]
         sheets, oversized = kerf_planner.pack_sheet_cuts(cuts, 48.0, 96.0)
@@ -52,10 +93,25 @@ class TestKerfPlanner(unittest.TestCase):
         self.assertIn("No lumber or sheet stock", empty)
 
         boards, oversized = kerf_planner.pack_linear_cuts(
-            [kerf_planner.LinearCut("A", 24.0)], 96.0, kerf_in=0.125
+            [kerf_planner.LinearCut("A", 24.0), kerf_planner.LinearCut("Big", 120.0)],
+            96.0,
+            kerf_in=0.125,
         )
-        report = kerf_planner.format_cut_plan_report({"2x4": (boards, oversized)}, {}, 0.125)
+        sheets, s_over = kerf_planner.pack_sheet_cuts(
+            [kerf_planner.SheetCut("P1", 24.0, 48.0), kerf_planner.SheetCut("PBig", 60.0, 80.0)],
+            48.0,
+            96.0,
+            kerf_in=0.125,
+        )
+        report = kerf_planner.format_cut_plan_report(
+            {"2x4": (boards, oversized)},
+            {'3/4" Plywood': (sheets, s_over)},
+            0.125,
+        )
         self.assertIn("[2x4] -> 1 stock board(s) needed", report)
+        self.assertIn("WARNING: \"Big\"", report)
+        self.assertIn('[3/4" Plywood] -> 1 sheet(s) needed', report)
+        self.assertIn("WARNING: \"PBig\"", report)
 
 
 if __name__ == "__main__":

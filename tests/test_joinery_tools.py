@@ -68,6 +68,16 @@ class TestJoineryTools(unittest.TestCase):
             joinery_tools.compute_dowel_centers((0.0, 0.0, 10.0, 2.0), 3, 1.0),
             [(1.0, 1.0), (5.0, 1.0), (9.0, 1.0)],
         )
+        # Portrait face + inset larger than half length falls back to full span
+        self.assertEqual(
+            joinery_tools.compute_dowel_centers((0.0, 0.0, 2.0, 10.0), 2, 6.0),
+            [(1.0, 0.0), (1.0, 10.0)],
+        )
+        # Landscape face with inset larger than half length
+        self.assertEqual(
+            joinery_tools.compute_dowel_centers((0.0, 0.0, 10.0, 2.0), 2, 6.0),
+            [(0.0, 1.0), (10.0, 1.0)],
+        )
 
     def test_pocket_hole_line_and_centers_vertical_and_horizontal(self):
         lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
@@ -78,6 +88,20 @@ class TestJoineryTools(unittest.TestCase):
         self.assertEqual(to_edge, (-1.0, 0.0))
         self.assertEqual(centers, [(3.0, 2.0), (3.0, 8.0)])
 
+        # Right edge + single pocket hole + fallback inset
+        lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
+            (0.0, 0.0, 20.0, 10.0), (20.0, 0.0), (20.0, 10.0), setback=3.0, count=1, edge_inset=2.0
+        )
+        self.assertEqual(lp0, (17.0, 0.0))
+        self.assertEqual(to_edge, (1.0, 0.0))
+        self.assertEqual(centers, [(17.0, 5.0)])
+
+        lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
+            (0.0, 0.0, 20.0, 10.0), (20.0, 0.0), (20.0, 10.0), setback=3.0, count=2, edge_inset=6.0
+        )
+        self.assertEqual(centers, [(17.0, 0.0), (17.0, 10.0)])
+
+        # Top edge + single hole
         lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
             (0.0, 0.0, 20.0, 10.0), (0.0, 10.0), (20.0, 10.0), setback=2.0, count=1, edge_inset=2.0
         )
@@ -85,6 +109,14 @@ class TestJoineryTools(unittest.TestCase):
         self.assertEqual(lp1, (20.0, 8.0))
         self.assertEqual(to_edge, (0.0, 1.0))
         self.assertEqual(centers, [(10.0, 8.0)])
+
+        # Bottom edge + 2 holes + fallback inset
+        lp0, lp1, to_edge, centers = joinery_tools.compute_pocket_hole_line_and_centers(
+            (0.0, 0.0, 20.0, 10.0), (0.0, 0.0), (20.0, 0.0), setback=2.0, count=2, edge_inset=15.0
+        )
+        self.assertEqual(lp0, (0.0, 2.0))
+        self.assertEqual(to_edge, (0.0, -1.0))
+        self.assertEqual(centers, [(0.0, 2.0), (20.0, 2.0)])
 
 
 if __name__ == "__main__":

@@ -49,6 +49,7 @@ class TestSheetStock(unittest.TestCase):
     def test_baltic_birch_5x5_limit(self):
         bb = lumber_catalog.SHEET_BY_NAME["18mm Baltic Birch"]
         self.assertAlmostEqual(bb.thickness_cm, 1.8)
+        self.assertEqual(bb.max_size_label, 'Max sheet: 60" x 60"')
         self.assertTrue(bb.fits_in_sheet(60.0, 60.0))
         self.assertFalse(bb.fits_in_sheet(48.0, 96.0))
 
