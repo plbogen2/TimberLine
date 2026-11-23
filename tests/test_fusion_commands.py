@@ -1,3 +1,4 @@
+import json
 import os
 import tempfile
 import types
@@ -51,6 +52,16 @@ class TestFusionCommands(unittest.TestCase):
         app.activeProduct = self.design
         app.userInterface = self.mock_ui
         adsk.core.Application.get.return_value = app
+
+    def test_manifest_uses_valid_fusion360_addin_schema(self):
+        manifest_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            "TimberLine.manifest",
+        )
+        with open(manifest_path, encoding="utf-8") as f:
+            data = json.load(f)
+        self.assertEqual(data["autodeskProduct"], "Fusion360")
+        self.assertEqual(data["type"], "addin")
 
     def test_joinery_ui_config_covers_all_joint_types(self):
         for jt in joinery_command.JOINT_TYPES:
