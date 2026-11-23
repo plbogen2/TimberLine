@@ -30,7 +30,7 @@ CMD_DESCRIPTION = (
     "Create dimensional lumber (2x4, 2x6, 1x4, 4x4) and sheet stock "
     "(plywood, MDF, Baltic birch) using nominal sizes."
 )
-PANEL_ID = "SolidCreatePanel"
+PANEL_ID = "TimberLinePanel"
 RESOURCE_FOLDER = os.path.join(ADDIN_DIR, "resources", "LumberIcon")
 
 # Keep event handlers alive for the lifetime of the add-in.

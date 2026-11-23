@@ -100,8 +100,21 @@ class TestFusionCommands(unittest.TestCase):
         # Unregister when items exist
         self.mock_ui.commandDefinitions.itemById.return_value = MagicMock()
         mock_panel.controls.itemById.return_value = MagicMock()
+        mock_panel.controls.count = 0
         TimberLine.stop({})
         self.assertEqual(len(TimberLine._handlers), 0)
+
+        # Panel auto-creation when TimberLinePanel does not exist yet
+        self.mock_ui.allToolbarPanels.itemById.return_value = None
+        solid_tab = MagicMock()
+        solid_tab.toolbarPanels.add.return_value = mock_panel
+        self.mock_ui.allToolbarTabs.itemById.return_value = solid_tab
+        self.mock_ui.commandDefinitions.itemById.return_value = None
+        TimberLine.run({})
+        solid_tab.toolbarPanels.add.assert_called_once_with(
+            "TimberLinePanel", "TimberLine", "SolidCreatePanel", False
+        )
+        TimberLine.stop({})
 
     def test_lumber_command_lifecycle_lumber_and_sheet(self):
         cmd = FakeCommand()

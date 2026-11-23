@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.3.3] - 2026-11-22
+### Changed
+- Placed all 5 TimberLine commands (**Create Lumber**, **Attach Board**, **Add Joinery**, **Cut List & Kerf**, **List Operations**) into their own dedicated **TimberLine** toolbar panel on the **Solid** tab.
+
 ## [1.3.2] - 2026-11-22
 ### Fixed
 - **Attach Board** now extrudes the new board **outward** from the selected **Source Face** (`+Z` normal) instead of sideways off the face, with **Half-Lap** and **Miter (45°)** overlapping into the existing board behind the face.

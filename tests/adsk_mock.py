@@ -289,8 +289,8 @@ def make_fake_component(name="Root"):
         prof_single = types.SimpleNamespace(profileLoops=FakeCollection([1]))
         prof_double = types.SimpleNamespace(profileLoops=FakeCollection([1, 2]))
         sk.profiles = FakeCollection([prof_single, prof_double])
-        sk.modelToSketchSpace = lambda pt: FakePoint3D(pt.x, pt.y, 0.0)
-        sk.sketchToModelSpace = lambda pt: FakePoint3D(pt.x, pt.y, 0.0)
+        sk.modelToSketchSpace = lambda pt: FakePoint3D(pt.x, pt.y, getattr(pt, "z", 0.0))
+        sk.sketchToModelSpace = lambda pt: FakePoint3D(pt.x, pt.y, getattr(pt, "z", 0.0))
         sk.deleteMe = lambda: None
         return sk
 

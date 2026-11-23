@@ -29,6 +29,12 @@ def register_panel_command(
     handlers.append(on_created)
 
     panel = ui.allToolbarPanels.itemById(panel_id)
+    if not panel:
+        solid_tab = ui.allToolbarTabs.itemById("SolidTab")
+        if solid_tab:
+            panel = solid_tab.toolbarPanels.add(
+                panel_id, "TimberLine", "SolidCreatePanel", False
+            )
     if panel and not panel.controls.itemById(cmd_id):
         cntrl = panel.controls.addCommand(cmd_def)
         cntrl.isPromotedByDefault = True
@@ -46,6 +52,8 @@ def unregister_panel_command(
         cntrl = panel.controls.itemById(cmd_id)
         if cntrl:
             cntrl.deleteMe()
+        if panel.controls.count == 0:
+            panel.deleteMe()
 
     cmd_def = ui.commandDefinitions.itemById(cmd_id)
     if cmd_def:
