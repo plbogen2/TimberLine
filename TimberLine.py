@@ -171,9 +171,13 @@ def _build_stock(state: dict) -> None:
 
     root_comp = design.rootComponent
     if state["new_component"]:
-        occ = root_comp.occurrences.addNewComponent(adsk.core.Matrix3D.create())
-        target_comp = occ.component
-        target_comp.name = comp_name
+        try:
+            occ = root_comp.occurrences.addNewComponent(adsk.core.Matrix3D.create())
+            target_comp = occ.component
+            target_comp.name = comp_name
+        except RuntimeError:
+            # Part Design documents only allow a single component; fall back to activeComponent.
+            target_comp = design.activeComponent
     else:
         target_comp = design.activeComponent
 

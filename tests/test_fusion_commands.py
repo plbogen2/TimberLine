@@ -163,6 +163,16 @@ class TestFusionCommands(unittest.TestCase):
         self.assertFalse(inputs.itemById("lumberOrient").isEnabled)
         cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
 
+        # Part Design fallback: addNewComponent raises RuntimeError -> uses activeComponent
+        orig_add_comp = self.design.rootComponent.occurrences.addNewComponent
+        self.design.rootComponent.occurrences.addNewComponent = MagicMock(
+            side_effect=RuntimeError("Part Design documents can only contain one component")
+        )
+        bodies_before = len(self.design.activeComponent.bRepBodies)
+        cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+        self.assertEqual(len(self.design.activeComponent.bRepBodies), bodies_before + 1)
+        self.design.rootComponent.occurrences.addNewComponent = orig_add_comp
+
         # Invalid length validation
         inputs.itemById("lumberLength").expression = "0 in"
         val.notify(v_args)
