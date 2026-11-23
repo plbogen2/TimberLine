@@ -20,6 +20,8 @@ $itemsToCopy = @(
     "attach_command.py",
     "corner_planner.py",
     "corner_command.py",
+    "panel_planner.py",
+    "panel_command.py",
     "operation_log.py",
     "operations_command.py",
     "kerf_planner.py",

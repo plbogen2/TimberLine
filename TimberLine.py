@@ -24,6 +24,7 @@ import kerf_command  # noqa: E402
 import lumber_catalog  # noqa: E402
 import operation_log  # noqa: E402
 import operations_command  # noqa: E402
+import panel_command  # noqa: E402
 
 CMD_ID = "TimberLineCreateCmd"
 CMD_NAME = "Create Lumber"
@@ -547,6 +548,7 @@ def run(context):
         attach_command.register_attach_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         corner_command.register_corner_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         joinery_command.register_joinery_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
+        panel_command.register_panel_command_ui(ui, PANEL_ID, ADDIN_DIR, _handlers)
         kerf_command.register_kerf_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
         operations_command.register_ops_command(ui, PANEL_ID, ADDIN_DIR, _handlers)
 
@@ -564,6 +566,7 @@ def stop(context):
         attach_command.unregister_attach_command(ui, PANEL_ID)
         corner_command.unregister_corner_command(ui, PANEL_ID)
         joinery_command.unregister_joinery_command(ui, PANEL_ID)
+        panel_command.unregister_panel_command_ui(ui, PANEL_ID)
         kerf_command.unregister_kerf_command(ui, PANEL_ID)
         operations_command.unregister_ops_command(ui, PANEL_ID)
         fusion_ui.unregister_panel_command(ui, PANEL_ID, CMD_ID)

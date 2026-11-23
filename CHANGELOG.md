@@ -2,6 +2,10 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.8.0] - 2026-11-22
+### Added
+- **Fill Panel** command (`TimberLine → Fill Panel`) to fill an opening between 2 to 4 boards with a sheet panel and automatically cut matching dados or rabbets into the surrounding boards.
+
 ## [1.7.0] - 2026-11-22
 ### Added
 - **Convert Corner** command (`TimberLine → Convert Corner`) to convert any two overlapping boards at a corner into a **Half-Lap**, **Miter (45°)**, **Bridle (A=Slot, B=Tenon)**, or trimmed **Butt** joint.

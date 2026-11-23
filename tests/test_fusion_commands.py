@@ -27,6 +27,8 @@ import joinery_command  # noqa: E402
 import kerf_command  # noqa: E402
 import operation_log  # noqa: E402
 import operations_command  # noqa: E402
+import panel_command  # noqa: E402
+import panel_planner  # noqa: E402
 
 
 def _make_fake_design():
@@ -95,9 +97,9 @@ class TestFusionCommands(unittest.TestCase):
 
         TimberLine._handlers.clear()
         TimberLine.run({})
-        self.assertEqual(self.mock_ui.commandDefinitions.addButtonDefinition.call_count, 6)
-        self.assertEqual(mock_panel.controls.addCommand.call_count, 6)
-        self.assertEqual(len(TimberLine._handlers), 6)
+        self.assertEqual(self.mock_ui.commandDefinitions.addButtonDefinition.call_count, 7)
+        self.assertEqual(mock_panel.controls.addCommand.call_count, 7)
+        self.assertEqual(len(TimberLine._handlers), 7)
 
         # Unregister when items exist
         self.mock_ui.commandDefinitions.itemById.return_value = MagicMock()
@@ -567,6 +569,57 @@ class TestFusionCommands(unittest.TestCase):
         corner_command.CornerPreviewHandler().notify(types.SimpleNamespace(command=bad_cmd))
         bad_v_args = types.SimpleNamespace(inputs=bad_cmd.commandInputs, areInputsValid=True)
         corner_command.CornerValidateHandler().notify(bad_v_args)
+        self.assertFalse(bad_v_args.areInputsValid)
+
+    def test_fill_panel_command_and_guards(self):
+        operation_log.SESSION_LOG.clear()
+        handlers = []
+        cmd = FakeCommand()
+        panel_command.PanelCommandCreatedHandler(handlers).notify(
+            types.SimpleNamespace(command=cmd)
+        )
+        inputs = cmd.commandInputs
+        val = cmd.validateInputs.handlers[0]
+        v_args = types.SimpleNamespace(inputs=inputs, areInputsValid=True)
+        val.notify(v_args)
+        self.assertFalse(v_args.areInputsValid)
+
+        b1 = make_fake_body("Left", 3.81, 100.0, 8.89, parent=self.design.rootComponent)
+        b2 = make_fake_body("Right", 3.81, 100.0, 8.89, parent=self.design.rootComponent)
+        b2.boundingBox.minPoint.x = 50.0
+        b2.boundingBox.maxPoint.x = 53.81
+        inputs.itemById("panelBoards").set_entities([b1, b2])
+        val.notify(v_args)
+        self.assertTrue(v_args.areInputsValid)
+
+        prev_args = types.SimpleNamespace(command=cmd, isValidResult=False)
+        cmd.executePreview.handlers[0].notify(prev_args)
+        self.assertTrue(prev_args.isValidResult)
+
+        cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+        self.assertEqual(len(operation_log.SESSION_LOG.entries()), 1)
+
+        # combine RuntimeError guard (non-intersecting board) + z0==0 + no design + error handlers
+        inputs.itemById("panelAlignment").select("Flush Back (-Normal Rabbet)")
+        self.design.rootComponent.features.combineFeatures.add = MagicMock(
+            side_effect=RuntimeError("No intersection")
+        )
+        cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+
+        inputs.itemById("panelBoards").set_entities([])
+        panel_command._execute_fill_panel(inputs)
+        app = adsk.core.Application.get.return_value
+        app.activeProduct = None
+        panel_command._execute_fill_panel(inputs)
+        app.activeProduct = self.design
+
+        bad_cmd = types.SimpleNamespace(
+            commandInputs=types.SimpleNamespace(itemById=MagicMock(side_effect=RuntimeError("boom")))
+        )
+        panel_command.PanelExecuteHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        panel_command.PanelPreviewHandler().notify(types.SimpleNamespace(command=bad_cmd))
+        bad_v_args = types.SimpleNamespace(inputs=bad_cmd.commandInputs, areInputsValid=True)
+        panel_command.PanelValidateHandler().notify(bad_v_args)
         self.assertFalse(bad_v_args.areInputsValid)
 
 
