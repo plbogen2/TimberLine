@@ -190,6 +190,7 @@ class TestFusionCommands(unittest.TestCase):
         )
         inputs = cmd.commandInputs
         face, edge = _make_fake_face_and_edge(self.design.rootComponent)
+        face.body.boundingBox.minPoint.z = -3.81  # 1.5" board behind source face
 
         val = cmd.validateInputs.handlers[0]
         v_args = types.SimpleNamespace(inputs=inputs, areInputsValid=True)
@@ -380,6 +381,7 @@ class TestFusionCommands(unittest.TestCase):
         )
         inputs = cmd.commandInputs
         face, edge = _make_fake_face_and_edge(self.design.rootComponent)
+        face.body.boundingBox.minPoint.z = -3.81  # 1.5" board behind source face
 
         val = cmd.validateInputs.handlers[0]
         v_args = types.SimpleNamespace(inputs=inputs, areInputsValid=True)
@@ -399,6 +401,16 @@ class TestFusionCommands(unittest.TestCase):
             inputs.itemById("attachJointType").select(jt)
             cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
         self.assertGreaterEqual(len(operation_log.SESSION_LOG.entries()), 3)
+
+        # Horizontal edge miter covers miter_axis_is_u=False branch
+        horiz_edge = types.SimpleNamespace(
+            startVertex=types.SimpleNamespace(geometry=FakePoint3D(0.0, 0.0, 0.0)),
+            endVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 0.0, 0.0)),
+        )
+        inputs.itemById("attachEdge").set_entities([horiz_edge])
+        inputs.itemById("attachJointType").select("Miter (45°)")
+        cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+        inputs.itemById("attachEdge").set_entities([edge])
 
         # Part Design fallback & activeComponent mode
         inputs.itemById("attachNewComp").value = False
