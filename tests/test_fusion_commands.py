@@ -207,11 +207,12 @@ class TestFusionCommands(unittest.TestCase):
             chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
             exe.notify(types.SimpleNamespace(command=cmd))
 
-        # Pocket holes on right edge triggers plane normal flip branch (dotProduct > 0)
-        # and verifies 75-deg perpendicular plane + outward offset for 15-deg drill path.
+        # Pocket holes on right edge verifies 75-deg perpendicular plane + outward offset
+        # and deterministically tests the plane normal flip branch (dotProduct > 0).
         angle_calls = []
         offset_calls = []
         orig_create_plane_in = self.design.rootComponent.constructionPlanes.createInput
+        orig_add_plane = self.design.rootComponent.constructionPlanes.add
 
         def _spy_plane_input():
             return types.SimpleNamespace(
@@ -219,7 +220,21 @@ class TestFusionCommands(unittest.TestCase):
                 setByOffset=lambda _p, d: offset_calls.append(d),
             )
 
+        normals = [
+            types.SimpleNamespace(dotProduct=lambda _v: 1.0),
+            types.SimpleNamespace(dotProduct=lambda _v: -1.0),
+            types.SimpleNamespace(dotProduct=lambda _v: -1.0),
+        ]
+
+        def _spy_add_plane(_inp):
+            n = normals.pop(0) if normals else types.SimpleNamespace(dotProduct=lambda _v: -1.0)
+            return types.SimpleNamespace(
+                geometry=types.SimpleNamespace(normal=n),
+                deleteMe=lambda: None,
+            )
+
         self.design.rootComponent.constructionPlanes.createInput = _spy_plane_input
+        self.design.rootComponent.constructionPlanes.add = _spy_add_plane
         right_edge = types.SimpleNamespace(
             startVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 0.0, 0.0)),
             endVertex=types.SimpleNamespace(geometry=FakePoint3D(10.0, 20.0, 0.0)),
@@ -229,6 +244,7 @@ class TestFusionCommands(unittest.TestCase):
         chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
         exe.notify(types.SimpleNamespace(command=cmd))
         self.design.rootComponent.constructionPlanes.createInput = orig_create_plane_in
+        self.design.rootComponent.constructionPlanes.add = orig_add_plane
         self.assertIn(("str", "75 deg"), angle_calls)
         self.assertIn(("str", "-75 deg"), angle_calls)
         self.assertTrue(any(val > 0 for _, val in offset_calls))
