@@ -253,6 +253,21 @@ class TestFusionCommands(unittest.TestCase):
         chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
         chg.notify(types.SimpleNamespace(input=inputs.itemById("refBoard"), inputs=inputs))
 
+        # Two-board Housing / Dado validation and execution
+        inputs.itemById("jointType").select("Housing / Dado (2-Board)")
+        chg.notify(types.SimpleNamespace(input=inputs.itemById("jointType"), inputs=inputs))
+        inputs.itemById("targetBoard").set_entities([])
+        val.notify(v_args)
+        self.assertFalse(v_args.areInputsValid)
+        exe.notify(types.SimpleNamespace(command=cmd))
+
+        target_board = make_fake_body("SidePanel", 1.825625, 30.0, 60.0, parent=self.design.rootComponent)
+        inputs.itemById("targetBoard").set_entities([target_board])
+        inputs.itemById("refBoard").set_entities([mating_board])
+        val.notify(v_args)
+        self.assertTrue(v_args.areInputsValid)
+        exe.notify(types.SimpleNamespace(command=cmd))
+
     def test_kerf_command_execute_and_export(self):
         handlers = []
         cmd = FakeCommand()

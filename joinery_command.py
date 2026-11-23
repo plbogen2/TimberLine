@@ -22,6 +22,7 @@ JOINT_TYPES = [
     "Rabbet",
     "Dado / Groove",
     "Half-Lap",
+    "Housing / Dado (2-Board)",
     "Tenon",
     "Mortise",
     "Pocket Holes (15°)",
@@ -30,6 +31,7 @@ JOINT_TYPES = [
 
 _EDGE_REQUIRED_JOINTS = {"Rabbet", "Dado / Groove", "Half-Lap", "Pocket Holes (15°)"}
 _BOARD_REF_JOINTS = {"Rabbet", "Dado / Groove", "Half-Lap"}
+_TWO_BOARD_JOINTS = {"Housing / Dado (2-Board)"}
 
 _ALL_PARAM_INPUT_IDS = (
     "jointWidth",
@@ -59,6 +61,7 @@ _JOINT_UI_CONFIG: Dict[str, List[Tuple[str, str, str]]] = {
         ("jointWidth", "Lap Length", "3.5 in"),
         ("jointDepth", "Depth", "0.75 in"),
     ],
+    "Housing / Dado (2-Board)": [],
     "Tenon": [
         ("tenonThick", "Tenon Thickness", "0.5 in"),
         ("tenonWidth", "Tenon Width", "2.5 in"),
@@ -351,6 +354,29 @@ def _execute_joinery(inputs: adsk.core.CommandInputs) -> None:
     joint_type = adsk.core.DropDownCommandInput.cast(
         inputs.itemById("jointType")
     ).selectedItem.name
+
+    if joint_type == "Housing / Dado (2-Board)":
+        tgt_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("targetBoard"))
+        tool_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("refBoard"))
+        if (
+            not tgt_sel
+            or not tool_sel
+            or tgt_sel.selectionCount == 0
+            or tool_sel.selectionCount == 0
+        ):
+            return
+        target_body = tgt_sel.selection(0).entity
+        tool_body = tool_sel.selection(0).entity
+        comp = target_body.parentComponent or design.activeComponent
+        tools = adsk.core.ObjectCollection.create()
+        tools.add(tool_body)
+        comb = comp.features.combineFeatures
+        comb_in = comb.createInput(target_body, tools)
+        comb_in.operation = adsk.fusion.FeatureOperations.CutFeatureOperation
+        comb_in.isKeepToolBodies = True
+        comb.add(comb_in)
+        return
+
     face_sel = adsk.core.SelectionCommandInput.cast(inputs.itemById("jointFace"))
     if face_sel.selectionCount == 0:
         return
@@ -463,16 +489,28 @@ class JoineryInputChangedHandler(adsk.core.InputChangedEventHandler):
                 return
             jt = adsk.core.DropDownCommandInput.cast(args.input).selectedItem.name
 
+            face_sel = adsk.core.SelectionCommandInput.cast(
+                inputs.itemById("jointFace")
+            )
+            if face_sel:
+                face_sel.isVisible = jt not in _TWO_BOARD_JOINTS
+
             edge_sel = adsk.core.SelectionCommandInput.cast(
                 inputs.itemById("jointEdge")
             )
             edge_sel.isVisible = jt in _EDGE_REQUIRED_JOINTS
 
+            tgt_sel = adsk.core.SelectionCommandInput.cast(
+                inputs.itemById("targetBoard")
+            )
+            if tgt_sel:
+                tgt_sel.isVisible = jt in _TWO_BOARD_JOINTS
+
             ref_sel = adsk.core.SelectionCommandInput.cast(
                 inputs.itemById("refBoard")
             )
             if ref_sel:
-                ref_sel.isVisible = jt in _BOARD_REF_JOINTS
+                ref_sel.isVisible = jt in _BOARD_REF_JOINTS or jt in _TWO_BOARD_JOINTS
 
             for input_id in _ALL_PARAM_INPUT_IDS:
                 inputs.itemById(input_id).isVisible = False
@@ -497,15 +535,33 @@ class JoineryValidateHandler(adsk.core.ValidateInputsEventHandler):
     def notify(self, args: adsk.core.ValidateInputsEventArgs):
         try:
             inputs = args.inputs
+            jt = adsk.core.DropDownCommandInput.cast(
+                inputs.itemById("jointType")
+            ).selectedItem.name
+            if jt in _TWO_BOARD_JOINTS:
+                tgt_sel = adsk.core.SelectionCommandInput.cast(
+                    inputs.itemById("targetBoard")
+                )
+                ref_sel = adsk.core.SelectionCommandInput.cast(
+                    inputs.itemById("refBoard")
+                )
+                if (
+                    not tgt_sel
+                    or not ref_sel
+                    or tgt_sel.selectionCount == 0
+                    or ref_sel.selectionCount == 0
+                ):
+                    args.areInputsValid = False
+                    return
+                args.areInputsValid = True
+                return
+
             face_sel = adsk.core.SelectionCommandInput.cast(
                 inputs.itemById("jointFace")
             )
             if not face_sel or face_sel.selectionCount == 0:
                 args.areInputsValid = False
                 return
-            jt = adsk.core.DropDownCommandInput.cast(
-                inputs.itemById("jointType")
-            ).selectedItem.name
             if jt in _EDGE_REQUIRED_JOINTS:
                 edge_sel = adsk.core.SelectionCommandInput.cast(
                     inputs.itemById("jointEdge")
@@ -540,7 +596,14 @@ class JoineryCommandCreatedHandler(adsk.core.CommandCreatedEventHandler):
                 "jointFace", "Target Face", "Select the planar face to cut"
             )
             face_sel.addSelectionFilter("PlanarFaces")
-            face_sel.setSelectionLimits(1, 1)
+            face_sel.setSelectionLimits(0, 1)
+
+            tgt_sel = inputs.addSelectionInput(
+                "targetBoard", "Target Board", "Select the board to cut into"
+            )
+            tgt_sel.addSelectionFilter("Bodies")
+            tgt_sel.setSelectionLimits(0, 1)
+            tgt_sel.isVisible = False
 
             edge_sel = inputs.addSelectionInput(
                 "jointEdge", "Reference Edge", "Select the edge on that face"

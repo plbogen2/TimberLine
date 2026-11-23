@@ -315,7 +315,15 @@ def make_fake_component(name="Root"):
         ),
         add=lambda _i: None,
     )
-    comp.features = types.SimpleNamespace(extrudeFeatures=extrudes, filletFeatures=fillets)
+    combines = types.SimpleNamespace(
+        createInput=lambda _t, _tools: types.SimpleNamespace(
+            operation=None, isKeepToolBodies=False
+        ),
+        add=lambda _i: None,
+    )
+    comp.features = types.SimpleNamespace(
+        extrudeFeatures=extrudes, filletFeatures=fillets, combineFeatures=combines
+    )
 
     plane_normals = [FakeVector3D(1.0, 0.0, 0.0)]
 
