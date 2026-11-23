@@ -6,6 +6,18 @@ from typing import Callable, List
 import adsk.core
 
 
+def _remove_legacy_control(
+    ui: adsk.core.UserInterface, panel_id: str, cmd_id: str
+) -> None:
+    if panel_id == "SolidCreatePanel":
+        return
+    legacy_panel = ui.allToolbarPanels.itemById("SolidCreatePanel")
+    if legacy_panel:
+        legacy_ctrl = legacy_panel.controls.itemById(cmd_id)
+        if legacy_ctrl:
+            legacy_ctrl.deleteMe()
+
+
 def register_panel_command(
     ui: adsk.core.UserInterface,
     panel_id: str,
@@ -28,12 +40,7 @@ def register_panel_command(
     cmd_def.commandCreated.add(on_created)
     handlers.append(on_created)
 
-    if panel_id != "SolidCreatePanel":
-        legacy_panel = ui.allToolbarPanels.itemById("SolidCreatePanel")
-        if legacy_panel:
-            legacy_ctrl = legacy_panel.controls.itemById(cmd_id)
-            if legacy_ctrl:
-                legacy_ctrl.deleteMe()
+    _remove_legacy_control(ui, panel_id, cmd_id)
 
     panel = ui.allToolbarPanels.itemById(panel_id)
     if not panel:
@@ -54,12 +61,7 @@ def unregister_panel_command(
     cmd_id: str,
 ) -> None:
     """Remove a command button from a toolbar panel and delete its definition."""
-    if panel_id != "SolidCreatePanel":
-        legacy_panel = ui.allToolbarPanels.itemById("SolidCreatePanel")
-        if legacy_panel:
-            legacy_ctrl = legacy_panel.controls.itemById(cmd_id)
-            if legacy_ctrl:
-                legacy_ctrl.deleteMe()
+    _remove_legacy_control(ui, panel_id, cmd_id)
 
     panel = ui.allToolbarPanels.itemById(panel_id)
     if panel:
