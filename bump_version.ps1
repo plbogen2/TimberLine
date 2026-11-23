@@ -1,14 +1,36 @@
 param(
-    [Parameter(Mandatory = $true)]
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version
+    [string]$Version,
+
+    [ValidateSet("feature", "fix", "minor", "patch")]
+    [string]$Bump
 )
 
 $ErrorActionPreference = "Stop"
 $rootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$versionPath = Join-Path $rootDir "VERSION"
+
+if (-not $Version -and -not $Bump) {
+    throw "Specify either -Version X.Y.Z or -Bump feature|fix"
+}
+
+if ($Bump) {
+    $current = (Get-Content $versionPath -Raw).Trim()
+    $parts = $current.Split('.')
+    $maj = [int]$parts[0]
+    $min = [int]$parts[1]
+    $pat = [int]$parts[2]
+    if ($Bump -in @("feature", "minor")) {
+        $min += 1
+        $pat = 0
+    } else {
+        $pat += 1
+    }
+    $Version = "$maj.$min.$pat"
+}
 
 # 1. Update VERSION
-Set-Content -Path (Join-Path $rootDir "VERSION") -Value $Version -Encoding UTF8
+[System.IO.File]::WriteAllText($versionPath, "$Version`n", [System.Text.UTF8Encoding]::new($false))
 
 # 2. Update TimberLine.manifest (regex preserves empty-key description object in PS 5.1)
 $manifestPath = Join-Path $rootDir "TimberLine.manifest"
