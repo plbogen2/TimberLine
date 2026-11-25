@@ -2,6 +2,11 @@
 
 All notable changes to **TimberLine** are documented in this file.
 
+## [1.9.1] - 2026-11-24
+### Fixed
+- **Attach Board:** Create `start_plane`, the new board body, and miter cuts **before** cutting `face` so cutting `face` never invalidates its `BRepFace` reference during `Half-Lap`, `Rabbet`, `Dado`, or `Miter`.
+- **Convert Corner:** Support **touching (butt-jointed) boards** in addition to overlapping boards by automatically extending the butted board across the corner junction before cutting `Half-Lap`, `Miter`, or `Bridle`.
+
 ## [1.9.0] - 2026-11-22
 ### Added
 - **N-Board Polygonal Fill Panel:** **Fill Panel** now accepts 2 or more boards (unlimited max) and generates N-sided polygonal panels (e.g., **6-sided hexagonal**, **8-sided octagonal**) with automatic dados/rabbets into every surrounding board.

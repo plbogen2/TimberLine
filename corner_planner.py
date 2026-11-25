@@ -36,6 +36,8 @@ class CornerCutPlan:
     b_boxes: Tuple[Box3D, ...]
     a_miter: Optional[MiterPrismSpec] = None
     b_miter: Optional[MiterPrismSpec] = None
+    extend_a_box: Optional[Box3D] = None
+    extend_b_box: Optional[Box3D] = None
     use_boolean_trim_a: bool = False
     use_boolean_trim_b: bool = False
 
@@ -51,6 +53,45 @@ def compute_overlap_box(box_a: Box3D, box_b: Box3D, eps: float = 1e-4) -> Option
     if x1 - x0 <= eps or y1 - y0 <= eps or z1 - z0 <= eps:
         return None
     return (x0, y0, z0, x1, y1, z1)
+
+
+def compute_corner_junction(
+    box_a: Box3D, box_b: Box3D, touch_eps: float = 0.05
+) -> Tuple[Optional[Box3D], Optional[Box3D], Optional[Box3D]]:
+    """Return ``(junction_box, extend_a_box, extend_b_box)`` for overlapping or touching boards."""
+    overlap = compute_overlap_box(box_a, box_b)
+    if overlap is not None:
+        return (overlap, None, None)
+
+    for ax in (0, 1, 2):
+        other = [i for i in (0, 1, 2) if i != ax]
+        o0_lo = max(box_a[other[0]], box_b[other[0]])
+        o0_hi = min(box_a[other[0] + 3], box_b[other[0] + 3])
+        o1_lo = max(box_a[other[1]], box_b[other[1]])
+        o1_hi = min(box_a[other[1] + 3], box_b[other[1] + 3])
+        if o0_hi - o0_lo <= 1e-4 or o1_hi - o1_lo <= 1e-4:
+            continue
+
+        # Check if A ends where B starts, or B ends where A starts
+        if abs(box_a[ax + 3] - box_b[ax]) <= touch_eps or abs(box_b[ax + 3] - box_a[ax]) <= touch_eps:
+            span_a = box_a[ax + 3] - box_a[ax]
+            span_b = box_b[ax + 3] - box_b[ax]
+            if span_a <= span_b:
+                # B butts into A's side; extend B across A
+                vals = [0.0] * 6
+                vals[other[0]], vals[other[0] + 3] = o0_lo, o0_hi
+                vals[other[1]], vals[other[1] + 3] = o1_lo, o1_hi
+                vals[ax], vals[ax + 3] = box_a[ax], box_a[ax + 3]
+                junc: Box3D = (vals[0], vals[1], vals[2], vals[3], vals[4], vals[5])
+                return (junc, None, junc)
+            vals = [0.0] * 6
+            vals[other[0]], vals[other[0] + 3] = o0_lo, o0_hi
+            vals[other[1]], vals[other[1] + 3] = o1_lo, o1_hi
+            vals[ax], vals[ax + 3] = box_b[ax], box_b[ax + 3]
+            junc = (vals[0], vals[1], vals[2], vals[3], vals[4], vals[5])
+            return (junc, junc, None)
+
+    return (None, None, None)
 
 
 def _pick_split_axis(overlap: Box3D, axis_choice: str) -> int:
@@ -86,9 +127,9 @@ def compute_corner_cuts(
     if joint_type == "Butt (Trim B to A)":
         return CornerCutPlan(joint_type, (), (), use_boolean_trim_b=True)
 
-    overlap = compute_overlap_box(box_a, box_b)
+    overlap, ext_a, ext_b = compute_corner_junction(box_a, box_b)
     if overlap is None:
-        raise ValueError("Boards must overlap at the corner to convert.")
+        raise ValueError("Boards must overlap or touch at the corner to convert.")
 
     axis = _pick_split_axis(overlap, axis_choice)
     lo = overlap[axis]
@@ -101,6 +142,8 @@ def compute_corner_cuts(
             joint_type=joint_type,
             a_boxes=(_replace_axis(overlap, axis, mid, hi),),
             b_boxes=(_replace_axis(overlap, axis, lo, mid),),
+            extend_a_box=ext_a,
+            extend_b_box=ext_b,
         )
 
     if joint_type == "Bridle (A=Slot, B=Tenon)":
@@ -113,6 +156,8 @@ def compute_corner_cuts(
                 _replace_axis(overlap, axis, lo, t1),
                 _replace_axis(overlap, axis, t2, hi),
             ),
+            extend_a_box=ext_a,
+            extend_b_box=ext_b,
         )
 
     # Miter (45°): cut complementary diagonal triangles in the 2 axes != split_axis
@@ -142,4 +187,6 @@ def compute_corner_cuts(
         b_boxes=(),
         a_miter=MiterPrismSpec(u_ax, v_ax, axis, tri_a, lo, hi),
         b_miter=MiterPrismSpec(u_ax, v_ax, axis, tri_b, lo, hi),
+        extend_a_box=ext_a,
+        extend_b_box=ext_b,
     )

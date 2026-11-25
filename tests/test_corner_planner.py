@@ -46,6 +46,24 @@ class TestCornerPlanner(unittest.TestCase):
         pb = corner_planner.compute_corner_cuts(self.box_a, self.box_b, "Butt (Trim B to A)")
         self.assertTrue(pb.use_boolean_trim_b)
 
+    def test_touching_butt_boards_auto_extend_into_corner_junction(self):
+        # Board B butts flush against Board A's y=3.81 face
+        b_touch = (0.0, 3.81, 0.0, 3.81, 121.92, 8.89)
+        plan = corner_planner.compute_corner_cuts(self.box_a, b_touch, "Half-Lap", "Z")
+        self.assertIsNone(plan.extend_a_box)
+        self.assertEqual(plan.extend_b_box, (0.0, 0.0, 0.0, 3.81, 3.81, 8.89))
+
+        # Swapped order: Board A is the shorter/touching side
+        plan2 = corner_planner.compute_corner_cuts(b_touch, self.box_a, "Half-Lap", "Z")
+        self.assertEqual(plan2.extend_a_box, (0.0, 0.0, 0.0, 3.81, 3.81, 8.89))
+        self.assertIsNone(plan2.extend_b_box)
+
+        # Touching on X with disjoint Y returns None
+        junc, _, _ = corner_planner.compute_corner_junction(
+            self.box_a, (243.84, 50.0, 0.0, 260.0, 60.0, 8.89)
+        )
+        self.assertIsNone(junc)
+
     def test_errors(self):
         with self.assertRaises(ValueError):
             corner_planner.compute_corner_cuts(self.box_a, self.box_b, "Unknown")

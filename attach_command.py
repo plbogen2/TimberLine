@@ -232,20 +232,8 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
     else:
         target_comp = existing_comp
 
-    # Cut pocket/lap/rabbet/dado into existing board
-    if plan.existing_cut_depth_cm > 0 and existing_body:
-        cut_sk = existing_comp.sketches.add(face)
-        cut_sk.name = f"{joint_type} Cut"
-        u0, v0, u1, v1 = plan.cross_section_rect
-        cut_sk.sketchCurves.sketchLines.addTwoPointRectangle(
-            adsk.core.Point3D.create(u0, v0, 0.0),
-            adsk.core.Point3D.create(u1, v1, 0.0),
-        )
-        _cut_profiles(
-            existing_comp, cut_sk, existing_body, -plan.existing_cut_depth_cm
-        )
-
-    # Start plane for new board
+    # 1. Create start plane (and miter planes if needed) BEFORE cutting `face`,
+    #    because cutting `face` can split/invalidate its BRepFace reference.
     if abs(plan.start_z_cm) > 1e-6:
         p_in = target_comp.constructionPlanes.createInput()
         p_in.setByOffset(face, adsk.core.ValueInput.createByReal(plan.start_z_cm))
@@ -261,6 +249,7 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
         )
         start_plane = target_comp.constructionPlanes.add(tilt_in)
 
+    # 2. Create the new board body first
     sk = target_comp.sketches.add(start_plane)
     sk.name = f"{lumber.nominal} Attached"
     u0, v0, u1, v1 = plan.cross_section_rect
@@ -282,6 +271,7 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
     new_body = feat.bodies.item(0)
     new_body.name = board_name
 
+    # 3. Cut miter wedges (before cutting `face`) or pocket/lap/rabbet/dado
     if plan.miter_existing_tri and existing_body:
         _cut_miter_wedge(
             existing_comp,
@@ -301,6 +291,16 @@ def _execute_attach(inputs: adsk.core.CommandInputs, record_log: bool = True) ->
             plan.miter_new_tri,
             new_body,
             "Miter New",
+        )
+    if plan.existing_cut_depth_cm > 0 and existing_body:
+        cut_sk = existing_comp.sketches.add(face)
+        cut_sk.name = f"{joint_type} Cut"
+        cut_sk.sketchCurves.sketchLines.addTwoPointRectangle(
+            adsk.core.Point3D.create(u0, v0, 0.0),
+            adsk.core.Point3D.create(u1, v1, 0.0),
+        )
+        _cut_profiles(
+            existing_comp, cut_sk, existing_body, -plan.existing_cut_depth_cm
         )
 
     ref_sketch.deleteMe()

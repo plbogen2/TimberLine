@@ -30,11 +30,12 @@ def _body_box_3d(body: adsk.fusion.BRepBody) -> corner_planner.Box3D:
     )
 
 
-def _cut_box_3d(
+def _apply_box_3d(
     comp: adsk.fusion.Component,
     target_body: adsk.fusion.BRepBody,
     box: corner_planner.Box3D,
     name: str,
+    operation,
 ) -> None:
     x0, y0, z0, x1, y1, z1 = box
     xy = comp.xYConstructionPlane
@@ -53,9 +54,7 @@ def _cut_box_3d(
     )
     if sk.profiles.count == 0:
         return
-    ext_in = comp.features.extrudeFeatures.createInput(
-        sk.profiles.item(0), adsk.fusion.FeatureOperations.CutFeatureOperation
-    )
+    ext_in = comp.features.extrudeFeatures.createInput(sk.profiles.item(0), operation)
     ext_in.setDistanceExtent(False, adsk.core.ValueInput.createByReal(z1 - z0))
     ext_in.participantBodies = [target_body]
     comp.features.extrudeFeatures.add(ext_in)
@@ -165,10 +164,26 @@ def _execute_convert_corner(
     else:
         comp_a = body_a.parentComponent or design.activeComponent
         comp_b = body_b.parentComponent or design.activeComponent
+        if plan.extend_a_box:
+            _apply_box_3d(
+                comp_a, body_a, plan.extend_a_box, "Extend A",
+                adsk.fusion.FeatureOperations.JoinFeatureOperation,
+            )
+        if plan.extend_b_box:
+            _apply_box_3d(
+                comp_b, body_b, plan.extend_b_box, "Extend B",
+                adsk.fusion.FeatureOperations.JoinFeatureOperation,
+            )
         for idx, box in enumerate(plan.a_boxes):
-            _cut_box_3d(comp_a, body_a, box, f"{jt} A-{idx + 1}")
+            _apply_box_3d(
+                comp_a, body_a, box, f"{jt} A-{idx + 1}",
+                adsk.fusion.FeatureOperations.CutFeatureOperation,
+            )
         for idx, box in enumerate(plan.b_boxes):
-            _cut_box_3d(comp_b, body_b, box, f"{jt} B-{idx + 1}")
+            _apply_box_3d(
+                comp_b, body_b, box, f"{jt} B-{idx + 1}",
+                adsk.fusion.FeatureOperations.CutFeatureOperation,
+            )
         if plan.a_miter:
             _cut_miter_prism(comp_a, body_a, plan.a_miter, "Miter A")
         if plan.b_miter:
@@ -222,7 +237,7 @@ class CornerValidateHandler(adsk.core.ValidateInputsEventHandler):
             if body_a == body_b:
                 args.areInputsValid = False
                 return
-            ov = corner_planner.compute_overlap_box(
+            ov, _, _ = corner_planner.compute_corner_junction(
                 _body_box_3d(body_a), _body_box_3d(body_b)
             )
             args.areInputsValid = ov is not None

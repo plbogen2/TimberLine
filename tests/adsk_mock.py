@@ -420,7 +420,7 @@ def install_adsk_mocks():
     fusion_mod.Sketch = MagicMock
     fusion_mod.ExtrudeFeature = MagicMock
     fusion_mod.FeatureOperations = types.SimpleNamespace(
-        NewBodyFeatureOperation=0, CutFeatureOperation=1
+        NewBodyFeatureOperation=0, CutFeatureOperation=1, JoinFeatureOperation=2
     )
 
     adsk_pkg.core = core_mod

@@ -554,6 +554,17 @@ class TestFusionCommands(unittest.TestCase):
             cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
         self.assertEqual(len(operation_log.SESSION_LOG.entries()), 5)
 
+        # Touching boards (non-overlapping Butt) trigger extend_a_box / extend_b_box join
+        b_touch = make_fake_body("TouchB", 3.81, 121.92, 8.89, parent=self.design.rootComponent)
+        b_touch.boundingBox.minPoint.y = 3.81
+        inputs.itemById("cornerBoardB").set_entities([b_touch])
+        inputs.itemById("cornerJointType").select("Half-Lap")
+        cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+
+        inputs.itemById("cornerBoardA").set_entities([b_touch])
+        inputs.itemById("cornerBoardB").set_entities([body_a])
+        cmd.execute.handlers[0].notify(types.SimpleNamespace(command=cmd))
+
         # No active design, missing selections, and error handlers
         inputs.itemById("cornerBoardA").set_entities([])
         corner_command._execute_convert_corner(inputs)
